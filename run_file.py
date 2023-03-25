@@ -624,19 +624,25 @@ async def give_admin(callback_query: types.CallbackQuery):
 
     chat_id = str(callback_query.data).split(':')[-1]
     user = user_model.get_user_or_users('chat_id', chat_id)
-    user_model.promote_to_admin(chat_id)
-    await bot.send_message(
-        chat_id,
-        "Test kiritish huquqi uchun so'rovingiz qabul qilindi ✅ Endi test kirita olishingiz mumkin 🙂\n\n%s" % \
-        md.code('Owned by abduraxmonomonov.uz'),
-        parse_mode=types.ParseMode.MARKDOWN_V2,
-        reply_markup=admin_kb,
-    )
-    await callback_query.message.answer(
-        f"{user['first_name']} {user['last_name']}'ga test kiritish huquqi taqdim etildi ✅\n\n" \
-        f"{md.code('Owned by abduraxmonomonov.uz')}",
-        parse_mode=types.ParseMode.MARKDOWN_V2,
-    )
+    try:
+        user_model.promote_to_admin(chat_id)
+    except AttributeError:
+        await callback_query.answer(
+            f"{user['first_name']} {user['last_name']}ga allaqachon 'admin' unvoni berilgan!", show_alert=True,
+        )
+    else:
+        await bot.send_message(
+            chat_id,
+            "Test kiritish huquqi uchun so'rovingiz qabul qilindi ✅ Endi test kirita olishingiz mumkin 🙂\n\n%s" % \
+            md.code('Owned by abduraxmonomonov.uz'),
+            parse_mode=types.ParseMode.MARKDOWN_V2,
+            reply_markup=admin_kb,
+        )
+        await callback_query.message.answer(
+            f"{user['first_name']} {user['last_name']}'ga test kiritish huquqi taqdim etildi ✅\n\n" \
+            f"{md.code('Owned by abduraxmonomonov.uz')}",
+            parse_mode=types.ParseMode.MARKDOWN_V2,
+        )
 
 
 @dp.message_handler(commands=['help'], state='*')
@@ -1049,18 +1055,24 @@ async def give_superuser(message: types.Message, state: FSMContext):
                 f"{first_name} {last_name} ismli foydalanuvchi bazada mavjud emas!"
             )
         else:
-            user_model.promote_to_superuser(user['chat_id'])
-            await bot.send_message(
-                user['chat_id'],
-                "Tabriklayman\! Siz oliy admin darajasigacha oshirildingiz 🙂\n\n%s" % \
-                md.code('Owned by abduraxmonomonov.uz'),
-                parse_mode=types.ParseMode.MARKDOWN_V2,
-                reply_markup=superuser_kb,
-            )
-            await message.reply(
-                f"{first_name} {last_name} ismli foydalanuvchi oliy admin darajasiga oshirildi."
-            )
-            await state.finish()
+            try:
+                user_model.promote_to_superuser(user['chat_id'])
+            except AttributeError:
+                await message.reply(
+                    f"{user['first_name']} {user['last_name']}ga allaqachon oliy admin unvoni berilgan!",
+                )
+            else:
+                await bot.send_message(
+                    user['chat_id'],
+                    "Tabriklayman\! Siz oliy admin darajasigacha oshirildingiz 🙂\n\n%s" % \
+                    md.code('Owned by abduraxmonomonov.uz'),
+                    parse_mode=types.ParseMode.MARKDOWN_V2,
+                    reply_markup=superuser_kb,
+                )
+                await message.reply(
+                    f"{first_name} {last_name} ismli foydalanuvchi oliy admin darajasiga oshirildi."
+                )
+                await state.finish()
     else:
         await message.reply(
             "Familiya va ismni noto'g'ri kiritdingiz 🤨\n\n" \
