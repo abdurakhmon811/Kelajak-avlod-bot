@@ -1442,7 +1442,7 @@ async def get_test_results(message: types.Message, state: FSMContext):
     if current_state is None:
         return
     
-    if len(message.text) == 5:
+    if len(message.text) == 5 and message.text.isdigit():
         test_ = test.get_test(message.text)
         if test_ is not None:
             results = test_results.get_results(test_['test_id'])
@@ -1519,7 +1519,7 @@ async def stop_test(message: types.Message, state: FSMContext):
                     await state.finish()
         else:
             await message.reply(
-                    f"{test_['test_id']} raqamli test mavjud emas\.\n\n" \
+                    f"{message.text} raqamli test mavjud emas\.\n\n" \
                     f"{md.code('Owned by abduraxmonomonov.uz')}",
                     parse_mode=types.ParseMode.MARKDOWN_V2,
                 )
