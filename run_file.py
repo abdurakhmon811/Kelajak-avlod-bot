@@ -237,7 +237,7 @@ async def change_class(message: types.Message, state: FSMContext):
     if len(message.text) <= 5 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
         user_model.change_class(
             message.chat['id'], 
-            re.sub(r'[^a-zA-Z0-9-]', '', message.text),
+            re.sub(r'[^a-zA-Z0-9]', '', message.text),
         )
         await message.reply(
             "Ajoyib\! Sinfingiz o'zgartirildi 🙂\n\n%s" % \
@@ -379,7 +379,7 @@ async def change_school(message: types.Message, state: FSMContext):
     if len(message.text) < 50 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
         user_model.change_school(
             message.chat['id'], 
-            re.sub(r'[^a-zA-Z0-9-,]', ' ', message.text),
+            re.sub(r'[^a-zA-Z0-9,]', ' ', message.text),
         )
         await message.reply(
             "Ajoyib\! Maktabingiz o'zgartirildi 🙂\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
@@ -1300,7 +1300,7 @@ async def add_test(message: types.Message, state: FSMContext):
 
     user = user_model.get_user_or_users('chat_id', message.chat['id'])
     text = message.text.split(':')
-    if len(text) == 2 and item_has_space(text) is False:
+    if len(text) == 2 and item_has_space(text) is False and not re.findall(r'[^a-zA-Z]', text[1]):
         ids = test.get_all_test_ids()
         test_id = get_test_code(5, ids)
         test_subject = str(text[0]).lower()
@@ -1654,8 +1654,8 @@ async def send_test_results(
         user_answers = get_items_in_dict(str(result['user_answers']).split(','))
         correct_answers = list(user_answers.items() & dicted_answers.items())
         incorrect_answers = list(user_answers.items() - dicted_answers.items())
-        str_cor_ans = ' ✅ '.join([f'{tup[0]}\. {str(tup[1]).upper()}' for tup in correct_answers])
-        str_inc_ans = ' ❌ '.join([f'{tup[0]}\. {str(tup[1]).upper()}' for tup in incorrect_answers])
+        str_cor_ans = ' ✅ '.join(sorted([f'{tup[0]}\. {str(tup[1]).upper()}' for tup in correct_answers]))
+        str_inc_ans = ' ❌ '.join(sorted([f'{tup[0]}\. {str(tup[1]).upper()}' for tup in incorrect_answers]))
         str_cor_ans += ' ✅ '
         str_inc_ans += ' ❌ '
         msg_to_taker = f"{test_['test_id']} raqamli test yakunlandi\.\n\n" \

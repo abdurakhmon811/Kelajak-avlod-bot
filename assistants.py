@@ -331,7 +331,8 @@ class TestResult:
 
         if test_id:
             self.cursor.execute(
-                """SELECT test_taker, correct_answers, user_answers  FROM test_results WHERE test_id = '%s'""" % test_id
+                """SELECT test_taker, correct_answers, user_answers  FROM test_results WHERE test_id = '%s' """ \
+                "ORDER BY correct_answers" % test_id
             )
             results = self.cursor.fetchall()
             if results:
