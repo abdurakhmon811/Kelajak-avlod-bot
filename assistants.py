@@ -14,7 +14,6 @@ class Channel:
         """Initialize the database connection."""
 
         self.db = db_connection
-        self.cursor = self.db.cursor()
     
 
     def get_channel(self, link: str = None, latest: bool = True) -> dict:
@@ -23,18 +22,21 @@ class Channel:
         """
 
         if not link and latest is True:
-            self.cursor.execute(
+            cursor = self.db.cursor()
+            cursor.execute(
                 """SELECT * FROM channels ORDER BY date_added DESC LIMIT 1"""
             )
         elif link and latest is False:
-            self.cursor.execute(
+            cursor = self.db.cursor()
+            cursor.execute(
                 """SELECT * FROM channels WHERE username = '%s'""" % link
             )
         else:
             raise ValueError(
                 'You cannot pass LINK and set LATEST to True simultaneously! Pass LINK or set latest to True!'
             )
-        result = self.cursor.fetchone()
+        result = cursor.fetchone()
+        cursor.close()
         if result:
             resulting_dict = {
                 'username': result[0],
@@ -49,8 +51,11 @@ class Channel:
         Retrieves all channel usernames that exist in the database.
         """
 
-        self.cursor.execute("""SELECT username FROM channels""")
-        results = self.cursor.fetchall()
+        cursor = self.db.cursor()
+
+        cursor.execute("""SELECT username FROM channels""")
+        results = cursor.fetchall()
+        cursor.close()
         return [each[0] for each in results] if results else None
 
 
@@ -63,7 +68,6 @@ class DBFactory:
         """Initialize the connection"""
 
         self.db = db_connection
-        self.cursor = self.db.cursor()
     
 
     def charfield(self, field_name: str, max_length: int, long_text: bool = False, default: str = None) -> str:
@@ -91,13 +95,16 @@ class DBFactory:
         """
         Creates a table with the specified name.
         """
+        
+        cursor = self.db.cursor()
 
         table_definition = {
             'table_name': table_name,
             'columns': ', '.join([arg for arg in args])
         }
-        self.cursor.execute("""CREATE TABLE %(table_name)s (%(columns)s)""" % table_definition)
+        cursor.execute("""CREATE TABLE %(table_name)s (%(columns)s)""" % table_definition)
         self.db.commit()
+        cursor.close()
     
 
     def set_constraint(self, constraint_name: str, for_column: str, constraint_type: str = 'PRIMARY KEY'):
@@ -169,7 +176,6 @@ class Storekeeper:
         """Initialize the database connection."""
 
         self.db = db_connection
-        self.cursor = self.db.cursor()
 
 
     def drop_table(self, table_name: str):
@@ -177,10 +183,14 @@ class Storekeeper:
         Drops/Removes the given table from the database.
         """
         
+        cursor = self.db.cursor()
+        
         try:
-            self.cursor.execute("""DROP TABLE %s""" % table_name)
+            cursor.execute("""DROP TABLE %s""" % table_name)
         except OperationalError:
             raise ValueError("Invalid table name!")
+        finally:
+            cursor.close()
     
 
     def get_supplies(self, table_name: str, columns: list | tuple, values: list | tuple):
@@ -200,8 +210,10 @@ class Storekeeper:
                 'columns': columns,
                 'values': values,
             }
-            self.cursor.execute("""INSERT INTO %(table_name)s (%(columns)s) VALUES (%(values)s)""" % entries)
+            cursor = self.db.cursor()
+            cursor.execute("""INSERT INTO %(table_name)s (%(columns)s) VALUES (%(values)s)""" % entries)
             self.db.commit()
+            cursor.close()
         else:
             raise ValueError('Invalid number of columns and values! The length of the two does not correspond.')
     
@@ -210,9 +222,13 @@ class Storekeeper:
         """
         Checks if the given table exists in the database.
         """
+        
+        cursor = self.db.cursor()
 
-        self.cursor.execute("""SHOW TABLES LIKE '%s'""" % table_name)
-        return True if self.cursor.fetchone() else False
+        cursor.execute("""SHOW TABLES LIKE '%s'""" % table_name)
+        result = cursor.fetchone()
+        cursor.close()
+        return True if result else False
     
 
     def throw_item_away(self, table_name: str, pk_name: str, pk_value: str | int):
@@ -220,8 +236,11 @@ class Storekeeper:
         Deletes an item corresponding to the given primary key from a row in the given table.
         """
         
-        self.cursor.execute("""DELETE FROM {} WHERE {} = '{}';""".format(table_name, pk_name, pk_value))
+        cursor = self.db.cursor()
+        
+        cursor.execute("""DELETE FROM {} WHERE {} = '{}';""".format(table_name, pk_name, pk_value))
         self.db.commit()
+        cursor.close()
 
 
 class Test:
@@ -233,7 +252,6 @@ class Test:
         """Initialize the database connection."""
 
         self.db = db_connection
-        self.cursor = self.db.cursor()
     
 
     def deactivate(self, test_id: str):
@@ -244,12 +262,14 @@ class Test:
         test = self.get_test(test_id)
         if test is not None:
             if int(test['is_active']) == True:
+                cursor = self.db.cursor()
                 now = time.strftime(r"%Y-%m-%d %H:%M:%S", time.localtime())
-                self.cursor.execute(
+                cursor.execute(
                     """UPDATE tests SET is_active = 0, date_deactivated = '%s' WHERE test_id = '%s'""" % \
                     (now, test_id)
                 )
                 self.db.commit()
+                cursor.close()
             else:
                 raise AttributeError('The test is already deactivated!')
         else:
@@ -260,9 +280,12 @@ class Test:
         """
         Retrieves all the ids related to test from the the database.
         """
+        
+        cursor = self.db.cursor()
 
-        self.cursor.execute("""SELECT test_id FROM tests""")
-        results = self.cursor.fetchall()
+        cursor.execute("""SELECT test_id FROM tests""")
+        results = cursor.fetchall()
+        cursor.close()
         return list(results) if results else None
     
 
@@ -272,8 +295,10 @@ class Test:
         """
 
         if test_id:
-            self.cursor.execute("""SELECT * FROM tests WHERE test_id = '%s'""" % test_id)
-            result = self.cursor.fetchone()
+            cursor = self.db.cursor()
+            cursor.execute("""SELECT * FROM tests WHERE test_id = '%s'""" % test_id)
+            result = cursor.fetchone()
+            cursor.close()
             if result:
                 resulting_dict = {
                     'test_id': result[0],
@@ -292,10 +317,13 @@ class Test:
         """
         Retrieves all the tests(either the active ones or not active ones) from the database.
         """
+        
+        cursor = self.db.cursor()
 
         output = []
-        self.cursor.execute("""SELECT * FROM tests""")
-        results = self.cursor.fetchall()
+        cursor.execute("""SELECT * FROM tests""")
+        results = cursor.fetchall()
+        cursor.close()
         if results:
             for result in results:
                 out_dict = {
@@ -321,7 +349,6 @@ class TestResult:
         """Initialize the database connection"""
 
         self.db = db_connection
-        self.cursor = self.db.cursor()
     
 
     def get_results(self, test_id: str) -> list:
@@ -330,11 +357,13 @@ class TestResult:
         """
 
         if test_id:
-            self.cursor.execute(
+            cursor = self.db.cursor()
+            cursor.execute(
                 """SELECT test_taker, correct_answers, user_answers  FROM test_results WHERE test_id = '%s' """ \
-                "ORDER BY correct_answers" % test_id
+                "ORDER BY correct_answers DESC" % test_id
             )
-            results = self.cursor.fetchall()
+            results = cursor.fetchall()
+            cursor.close()
             if results:
                 resulting = []
                 for result in results:
@@ -357,67 +386,95 @@ class User:
         """Initialize the database connection."""
     
         self.db = db_connection
-        self.cursor = self.db.cursor()
     
 
     def change_name(self, user_id: str, first_name: str, last_name: str):
         """
         Changes the user's names.
         """
+        
+        cursor = self.db.cursor()
 
-        self.cursor.execute(
+        cursor.execute(
             """UPDATE users SET fname = '%s', lname = '%s' WHERE chat_id = '%s'""" % \
             (first_name, last_name, user_id)
         )
         self.db.commit()
+        cursor.close()
 
 
     def change_phone_number(self, user_id: str, phone_number: str):
         """
         Changes the user's phone number.
         """
+        
+        cursor = self.db.cursor()
 
-        self.cursor.execute(
+        cursor.execute(
             """UPDATE users SET phone_number = '%s' WHERE chat_id = '%s'""" % \
             (phone_number, user_id)
         )
         self.db.commit()
+        cursor.close()
     
     
     def change_address(self, user_id: str, address: str):
         """
         Changes the user's address.
         """
+        
+        cursor = self.db.cursor()
 
-        self.cursor.execute(
+        cursor.execute(
             """UPDATE users SET address = '%s' WHERE chat_id = '%s'""" % \
             (address, user_id)
         )
         self.db.commit()
+        cursor.close()
 
 
     def change_school(self, user_id: str, school: str):
         """
         Changes the user's school.
         """
+        
+        cursor = self.db.cursor()
 
-        self.cursor.execute(
+        cursor.execute(
             """UPDATE users SET school = '%s' WHERE chat_id = '%s'""" % \
             (school, user_id)
         )
         self.db.commit()
+        cursor.close()
     
 
     def change_class(self, user_id: str, class_: str):
         """
         Changes the user's class.
         """
+        
+        cursor = self.db.cursor()
 
-        self.cursor.execute(
+        cursor.execute(
             """UPDATE users SET class = '%s' WHERE chat_id = '%s'""" % \
             (class_, user_id)
         )
         self.db.commit()
+        cursor.close()
+
+    
+    def delete_user(self, user_id: str):
+        """
+        Deletes the specified user from the database.
+        """
+        
+        cursor = self.db.cursor()
+
+        cursor.execute(
+            """DELETE FROM users WHERE chat_id = '%s'""" % user_id
+        )
+        self.db.commit()
+        cursor.close()
     
 
     def get_user_by_name(self, first_name: str, last_name: str) -> dict:
@@ -426,8 +483,10 @@ class User:
         """
 
         if first_name and last_name:
-            self.cursor.execute("""SELECT * FROM users WHERE fname = '%s' AND lname = '%s'""" % (first_name, last_name))
-            result = self.cursor.fetchone()
+            cursor = self.db.cursor()
+            cursor.execute("""SELECT * FROM users WHERE fname = '%s' AND lname = '%s'""" % (first_name, last_name))
+            result = cursor.fetchone()
+            cursor.close()
             if result:
                 out_dict = {
                     'chat_id': result[0],
@@ -459,9 +518,13 @@ class User:
         Set many to True if you want to get a number of users with the same primary key.
         """
 
+        
+
         if pk_name and pk_value and all is False and many is False:
-            self.cursor.execute("""SELECT * FROM users WHERE {} = '{}'""".format(pk_name, pk_value))
-            result = self.cursor.fetchone()
+            cursor = self.db.cursor()
+            cursor.execute("""SELECT * FROM users WHERE {} = '{}'""".format(pk_name, pk_value))
+            result = cursor.fetchone()
+            cursor.close()
             if result:
                 resulting_dict = {
                     'chat_id': result[0],
@@ -477,8 +540,10 @@ class User:
                 }
                 return resulting_dict
         elif not pk_name and not pk_value and all is True and many is False:
-            self.cursor.execute("""SELECT * FROM users""")
-            results = self.cursor.fetchall()
+            cursor = self.db.cursor()
+            cursor.execute("""SELECT * FROM users""")
+            results = cursor.fetchall()
+            cursor.close()
             output = []
             if results:
                 for result in results:
@@ -497,8 +562,10 @@ class User:
                     output.append(resulting_dict)
                 return output
         elif pk_name and pk_value and all is False and many is True:
-            self.cursor.execute("""SELECT * FROM users WHERE {} = '{}'""".format(pk_name, pk_value))
-            results = self.cursor.fetchall()
+            cursor = self.db.cursor()
+            cursor.execute("""SELECT * FROM users WHERE {} = '{}'""".format(pk_name, pk_value))
+            results = cursor.fetchall()
+            cursor.close()
             out = []
             if results:
                 for result in results:
@@ -524,8 +591,11 @@ class User:
         Returns the number of all available users.
         """
 
-        self.cursor.execute("""SELECT chat_id FROM users""")
-        results = self.cursor.fetchall()
+        cursor = self.db.cursor()
+
+        cursor.execute("""SELECT chat_id FROM users""")
+        results = cursor.fetchall()
+        cursor.close()
         return len(results)
 
 
@@ -537,8 +607,10 @@ class User:
         user = self.get_user_or_users('chat_id', chat_id)
         if user is not None:
             if int(user['is_admin']) == False:
-                self.cursor.execute("""UPDATE users SET is_admin = 1 WHERE chat_id = '%s'""" % chat_id)
+                cursor = self.db.cursor()
+                cursor.execute("""UPDATE users SET is_admin = 1 WHERE chat_id = '%s'""" % chat_id)
                 self.db.commit()
+                cursor.close()
             else:
                 raise AttributeError('The user is already an admin!')
         else:
@@ -553,8 +625,10 @@ class User:
         user = self.get_user_or_users('chat_id', chat_id)
         if user is not None:
             if int(user['is_superuser']) == False:
-                self.cursor.execute("""UPDATE users SET is_superuser = 1, is_admin = 1 WHERE chat_id = '%d'""" % chat_id)
+                cursor = self.db.cursor()
+                cursor.execute("""UPDATE users SET is_superuser = 1, is_admin = 1 WHERE chat_id = '%d'""" % chat_id)
                 self.db.commit()
+                cursor.close()
             else:
                 raise AttributeError('The user is already a superuser!')
         else:

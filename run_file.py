@@ -61,7 +61,7 @@ else:
     if sk.table_exists('users') is False:
         fac.create_table(
             'users', 
-            fac.integerfield('chat_id'), 
+            fac.integerfield('chat_id', 'bigint'), 
             fac.charfield('fname', 150, long_text=True), 
             fac.charfield('lname', 150, long_text=True), 
             fac.charfield('phone_number', 13),
@@ -107,21 +107,22 @@ else:
     print('Database connection made successfully!')
 
 # Keyboard buttons
-addChannelBtn = KeyboardButton("Obuna uchun kanal qo'shish ➕") # issues are present
+addChannelBtn = KeyboardButton("Obuna uchun kanal qo'shish ➕")
 addTestBtn = KeyboardButton("Test qo'shish ➕")
 availableTestsBtn = KeyboardButton("Testlar 🗂")
-checkTestBtn = KeyboardButton("Test javoblarini tekshirish ✅") # DONE, issues are present
-deactivateTestBtn = KeyboardButton("Testni to'xtatish ⛔️") # DONE, issues are present
+checkTestBtn = KeyboardButton("Test javoblarini tekshirish ✅")
+deactivateTestBtn = KeyboardButton("Testni to'xtatish ⛔️")
+deleteUser = KeyboardButton("Foydalanuvchini o'chirish 🗑")
 getAdminBtn = KeyboardButton("Test kiritish huquqini olish ✅")
-getTestResultsBtn = KeyboardButton("Test natijalarini ko'rish 📊") # DONE, issues are present
+getTestResultsBtn = KeyboardButton("Test natijalarini ko'rish 📊")
 giveSuperuserBtn = KeyboardButton("Oliy admin huquqini berish 👨🏻‍✈️")
-myInfoBtn = KeyboardButton("Mening ma'lumotlarim 📄") # DONE, issues are present
-usersCountBtn = KeyboardButton("Foydalanuvchilar 👤") # not done
+myInfoBtn = KeyboardButton("Mening ma'lumotlarim 📄")
+usersCountBtn = KeyboardButton("Foydalanuvchilar 👤")
 kb = ReplyKeyboardMarkup(resize_keyboard=True).row(getAdminBtn, checkTestBtn).add(myInfoBtn)
 superuser_kb = ReplyKeyboardMarkup(resize_keyboard=True)
 superuser_kb.add(addChannelBtn).row(addTestBtn, availableTestsBtn).add(deactivateTestBtn).add(checkTestBtn)
 superuser_kb.add(getTestResultsBtn)
-superuser_kb.add(myInfoBtn, usersCountBtn).add(giveSuperuserBtn)
+superuser_kb.add(myInfoBtn, usersCountBtn).add(giveSuperuserBtn).add(deleteUser)
 admin_kb = ReplyKeyboardMarkup(resize_keyboard=True).row(addTestBtn, checkTestBtn).add(getTestResultsBtn).add(myInfoBtn)
 
 
@@ -136,6 +137,7 @@ class Form(StatesGroup):
     change_phone_number = State()
     change_school = State()
     class_ = State()
+    delete_user = State()
     give_superuser = State()
     names = State()
     phone_number = State()
@@ -154,6 +156,7 @@ cancallable_states = (
     Form.change_names,
     Form.change_phone_number,
     Form.change_school,
+    Form.delete_user,
     Form.give_superuser,
     Form.stop_test,
     Form.superuser_password,
@@ -237,7 +240,7 @@ async def change_class(message: types.Message, state: FSMContext):
     if len(message.text) <= 5 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
         user_model.change_class(
             message.chat['id'], 
-            re.sub(r'[^a-zA-Z0-9]', '', message.text),
+            re.sub(r'[^a-zA-Z0-9]', ' ', message.text),
         )
         await message.reply(
             "Ajoyib\! Sinfingiz o'zgartirildi 🙂\n\n%s" % \
@@ -457,6 +460,8 @@ async def check_test(message: types.Message, state: FSMContext):
 
     splitted_message = message.text.split(':')
     if (
+            len(splitted_message[0]) == 5 and
+            splitted_message[0].isdigit() and
             len(splitted_message) == 3 and 
             splitted_message[1] != '' and
             item_has_space(splitted_message) is False and not 
@@ -892,7 +897,7 @@ async def register_names(message: types.Message, state: FSMContext):
             message.chat['id'], 
             names['first_name'].title(), 
             names['last_name'].title(), 
-            message.chat['username'], 
+            str(message.chat['username']).replace('_', '\_'), 
             1 if message.chat['id'] == bot_owner_id else 0,
             1 if message.chat['id'] == bot_owner_id else 0,
         ]
@@ -1209,6 +1214,69 @@ async def check_superuser_password(message: types.Message, state: FSMContext):
         )
 
 
+@dp.message_handler(state=Form.delete_user)
+async def delete_user(message: types.Message, state: FSMContext):
+    """
+    Deletes the specified user.
+    """
+
+    current_state = await state.get_state()
+    if current_state is None:
+        return
+    
+    splitted = message.text.split()
+    if len(splitted) == 2 and item_has_space(splitted) is False and names_valid(splitted) is True:
+        names = {}
+        for name in splitted:
+            if name.startswith('I:') or name.startswith('i:'):
+                names['first_name'] = name.lower().lstrip('i:').strip()
+            elif name.startswith('F:') or name.startswith('f:'):
+                names['last_name'] = name.lower().lstrip('f:').strip()
+        user = user_model.get_user_by_name(names['first_name'], names['last_name'])
+        if user:
+            user_model.delete_user(user['chat_id'])
+            await message.reply(
+                f"{user['chat_id']} raqamli foydalanuvchi bazadan o'chirildi\.\n\n" \
+                f"{md.code('Owned by abduraxmonomonov.uz')}",
+                parse_mode=types.ParseMode.MARKDOWN_V2,
+            )
+            await state.finish()
+        else:
+            await message.reply(
+                f"{user['last_name']} {user['first_name']} nomli foydalanuvchi topilmadi\.\n\n" \
+                f"{md.code('Owned by abduraxmonomonov.uz')}",
+                parse_mode=types.ParseMode.MARKDOWN_V2,
+            )
+    else:
+        await message.reply(
+            "Ism familiyangizni yuqoridagi aytilgandek kiritmaganga o'xshaysiz 🤨\. " \
+            "Ismlarda belgi va sonlarga yo'l qo'yilmasligini ham yodda tuting\.\n\n%s" % \
+            md.code('Owned by abduraxmonomonov.uz'),
+            parse_mode=types.ParseMode.MARKDOWN_V2,
+        )
+
+
+@dp.message_handler(Text(equals="Foydalanuvchini o'chirish 🗑"))
+async def delete_user_state(message: types.Message):
+    """
+    Deletes the specified user.
+    """
+
+    user = user_model.get_user_or_users('chat_id', message.chat['id'])
+    if user['is_superuser']:
+        await Form.delete_user.set()
+        await message.reply(
+            "Foydalanuvchining familiya va ismini kiriting\.\n\n%s\n\n%s" % \
+            (
+                "⚠️Familiya oldidan 'f:' va ism oldidan 'i:' belgilarini qo'yishni unutmang⚠️",
+                md.code('Owned by abduraxmonomonov.uz')
+            ),
+            parse_mode=types.ParseMode.MARKDOWN_V2,
+        )
+    else:
+        unknown_command(message)
+
+
 @dp.message_handler(Text(equals="Foydalanuvchilar 👤"))
 async def get_users(message: types.Message):
     """
@@ -1312,7 +1380,7 @@ async def add_test(message: types.Message, state: FSMContext):
 
     user = user_model.get_user_or_users('chat_id', message.chat['id'])
     text = message.text.split(':')
-    if len(text) == 2 and item_has_space(text) is False and not re.findall(r'[^a-zA-Z]', text[1]):
+    if len(text) == 2 and item_has_space(text) is False and not re.findall(r'[^a-zA-Z0-9_]', text[0]) and not re.findall(r'[^a-zA-Z]', text[1]):
         ids = test.get_all_test_ids()
         test_id = get_test_code(5, ids)
         test_subject = str(text[0]).lower()
@@ -1457,7 +1525,7 @@ async def get_test_results(message: types.Message, state: FSMContext):
                 f"{time.strftime(r'%Y/%m/%d %H:%M:%S', time.localtime())} holati bo'yicha natijalar:\n\n"
                 # Value here is a dict
                 for index, value in enumerate(results):
-                    out_msg += f"{index + 1}\. {value['test_taker']} \- {value['correct_answers']} ✅"
+                    out_msg += f"{index + 1}\. {value['test_taker']} \- {value['correct_answers']} ✅\n"
                 out_msg = out_msg + '\n\n' + md.code('Owned by abduraxmonomonov.uz')
                 await message.reply(
                     out_msg,
@@ -1610,7 +1678,7 @@ async def get_test_answers(message: types.Message):
 
     await Form.test_check.set()
     text = "Javoblarni quyidagi ko'rinishda yuboring ⬇️\n\n"
-    text2 = md.code("<test\_kodi\>:<fan\_nomi\>:javoblar\.\.\.\n\n")
+    text2 = md.code("<test_kodi>:<fan_nomi>:javoblar...\n\n")
     text3 = "Misol \-\> %s\n\n%s" % (md.code('12345:informatika:abcdabcdabcd...'), md.code('Owned by abduraxmonomonov.uz'))
     await message.reply(text + text2 + text3, parse_mode=types.ParseMode.MARKDOWN_V2)
 
@@ -1772,4 +1840,4 @@ async def unknown_command(message: types.Message):
 
 
 if __name__ == '__main__':
-    executor.start_polling(dp)
+    executor.start_polling(dp, skip_updates=True)
