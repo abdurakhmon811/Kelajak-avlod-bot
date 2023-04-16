@@ -65,7 +65,7 @@ else:
             'users', 
             fac.integerfield('chat_id', 'bigint'), 
             fac.charfield('name', 150, long_text=True), 
-            fac.charfield('phone_number', 13),
+            fac.charfield('phone_number', 20, long_text=True),
             fac.charfield('school', 100, long_text=True),
             fac.charfield('username', 100, long_text=True), 
             fac.integerfield('is_superuser', 'tinyint'), 
