@@ -21,22 +21,25 @@ class Channel:
         Retrieves the data about the channel with the primary key and returns a dictionary containing the data.
         """
 
+        result = None
         if not link and latest is True:
             cursor = self.db.cursor()
             cursor.execute(
                 """SELECT * FROM channels ORDER BY date_added DESC LIMIT 1"""
             )
+            result = cursor.fetchone()
+            cursor.close()
         elif link and latest is False:
             cursor = self.db.cursor()
             cursor.execute(
                 """SELECT * FROM channels WHERE username = '%s'""" % link
             )
+            result = cursor.fetchone()
+            cursor.close()
         else:
             raise ValueError(
                 'You cannot pass LINK and set LATEST to True simultaneously! Pass LINK or set latest to True!'
             )
-        result = cursor.fetchone()
-        cursor.close()
         if result:
             resulting_dict = {
                 'username': result[0],
@@ -313,9 +316,9 @@ class Test:
         return None
     
 
-    def get_tests(self, is_active: bool = True) -> list:
+    def get_tests(self) -> list:
         """
-        Retrieves all the tests(either the active ones or not active ones) from the database.
+        Retrieves all the tests from the database.
         """
         
         cursor = self.db.cursor()
@@ -388,16 +391,16 @@ class User:
         self.db = db_connection
     
 
-    def change_name(self, user_id: str, first_name: str, last_name: str):
+    def change_name(self, user_id: str, name: str):
         """
-        Changes the user's names.
+        Changes the user's name.
         """
         
         cursor = self.db.cursor()
 
         cursor.execute(
-            """UPDATE users SET fname = '%s', lname = '%s' WHERE chat_id = '%s'""" % \
-            (first_name, last_name, user_id)
+            """UPDATE users SET name = '%s' WHERE chat_id = '%s'""" % \
+            (name, user_id)
         )
         self.db.commit()
         cursor.close()
@@ -416,21 +419,6 @@ class User:
         )
         self.db.commit()
         cursor.close()
-    
-    
-    def change_address(self, user_id: str, address: str):
-        """
-        Changes the user's address.
-        """
-        
-        cursor = self.db.cursor()
-
-        cursor.execute(
-            """UPDATE users SET address = '%s' WHERE chat_id = '%s'""" % \
-            (address, user_id)
-        )
-        self.db.commit()
-        cursor.close()
 
 
     def change_school(self, user_id: str, school: str):
@@ -443,21 +431,6 @@ class User:
         cursor.execute(
             """UPDATE users SET school = '%s' WHERE chat_id = '%s'""" % \
             (school, user_id)
-        )
-        self.db.commit()
-        cursor.close()
-    
-
-    def change_class(self, user_id: str, class_: str):
-        """
-        Changes the user's class.
-        """
-        
-        cursor = self.db.cursor()
-
-        cursor.execute(
-            """UPDATE users SET class = '%s' WHERE chat_id = '%s'""" % \
-            (class_, user_id)
         )
         self.db.commit()
         cursor.close()
@@ -477,28 +450,25 @@ class User:
         cursor.close()
     
 
-    def get_user_by_name(self, first_name: str, last_name: str) -> dict:
+    def get_user_by_name(self, name: str) -> dict:
         """
-        Retrieves the user with the corresponding given names.
+        Retrieves the user with the corresponding name.
         """
 
-        if first_name and last_name:
+        if name:
             cursor = self.db.cursor()
-            cursor.execute("""SELECT * FROM users WHERE fname = '%s' AND lname = '%s'""" % (first_name, last_name))
+            cursor.execute("""SELECT * FROM users WHERE name = '%s'""" % name)
             result = cursor.fetchone()
             cursor.close()
             if result:
                 out_dict = {
                     'chat_id': result[0],
-                    'first_name': result[1],
-                    'last_name': result[2],
-                    'phone_number': result[3],
-                    'address': result[4],
-                    'school': result[5],
-                    'class': result[6],
-                    'username': "Mavjud emas" if result[7] == 'None' else result[7],
-                    'is_superuser': True if int(result[8]) == 1 else False,
-                    'is_admin': True if int(result[9]) == 1 else False,
+                    'name': result[1],
+                    'phone_number': result[2],
+                    'school': result[3],
+                    'username': "Mavjud emas" if result[4] == 'None' else result[4],
+                    'is_superuser': True if int(result[5]) == 1 else False,
+                    'is_admin': True if int(result[6]) == 1 else False,
                 }
                 return out_dict
             return None
@@ -518,8 +488,6 @@ class User:
         Set many to True if you want to get a number of users with the same primary key.
         """
 
-        
-
         if pk_name and pk_value and all is False and many is False:
             cursor = self.db.cursor()
             cursor.execute("""SELECT * FROM users WHERE {} = '{}'""".format(pk_name, pk_value))
@@ -528,15 +496,12 @@ class User:
             if result:
                 resulting_dict = {
                     'chat_id': result[0],
-                    'first_name': result[1],
-                    'last_name': result[2],
-                    'phone_number': result[3],
-                    'address': result[4],
-                    'school': result[5],
-                    'class': result[6],
-                    'username': "Mavjud emas" if result[7] == 'None' else result[7],
-                    'is_superuser': True if int(result[8]) == 1 else False,
-                    'is_admin': True if int(result[9]) == 1 else False,
+                    'name': result[1],
+                    'phone_number': result[2],
+                    'school': result[3],
+                    'username': "Mavjud emas" if result[4] == 'None' else result[4],
+                    'is_superuser': True if int(result[5]) == 1 else False,
+                    'is_admin': True if int(result[6]) == 1 else False,
                 }
                 return resulting_dict
         elif not pk_name and not pk_value and all is True and many is False:
@@ -549,15 +514,12 @@ class User:
                 for result in results:
                     resulting_dict = {
                         'chat_id': result[0],
-                        'first_name': result[1],
-                        'last_name': result[2],
-                        'phone_number': result[3],
-                        'address': result[4],
-                        'school': result[5],
-                        'class': result[6],
-                        'username': "Mavjud emas" if result[7] == 'None' else result[7],
-                        'is_superuser': True if int(result[8]) == 1 else False,
-                        'is_admin': True if int(result[9]) == 1 else False,
+                        'name': result[1],
+                        'phone_number': result[2],
+                        'school': result[3],
+                        'username': "Mavjud emas" if result[4] == 'None' else result[4],
+                        'is_superuser': True if int(result[5]) == 1 else False,
+                        'is_admin': True if int(result[6]) == 1 else False,
                     }
                     output.append(resulting_dict)
                 return output
@@ -571,15 +533,12 @@ class User:
                 for result in results:
                     resulting_dict = {
                         'chat_id': result[0],
-                        'first_name': result[1],
-                        'last_name': result[2],
-                        'phone_number': result[3],
-                        'address': result[4],
-                        'school': result[5],
-                        'class': result[6],
-                        'username': "Mavjud emas" if result[7] == 'None' else result[7],
-                        'is_superuser': True if int(result[8]) == 1 else False,
-                        'is_admin': True if int(result[9]) == 1 else False,
+                        'name': result[1],
+                        'phone_number': result[2],
+                        'school': result[3],
+                        'username': "Mavjud emas" if result[4] == 'None' else result[4],
+                        'is_superuser': True if int(result[5]) == 1 else False,
+                        'is_admin': True if int(result[6]) == 1 else False,
                     }
                     out.append(resulting_dict)
                 return out
@@ -681,17 +640,14 @@ def item_has_space(array: list) -> bool:
     return False
 
 
-def names_valid(items: list | tuple) -> bool:
+def name_valid(items: list | tuple) -> bool:
     """
-    Validates names.
+    Validates name.
     """
 
     result = None
     for item in items:
-        if (
-            not re.findall(r'[^a-zA-Z:]', item) and 
-            (str(item).lower().startswith('f:') or str(item).lower().startswith('i:'))
-        ):
+        if not re.findall(r"[^a-zA-Z\\s:'’`-]", item):
             result = True
         else:
             result = False

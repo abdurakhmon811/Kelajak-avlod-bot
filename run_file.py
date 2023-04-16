@@ -2,12 +2,13 @@
 NOTE: When creating tables for users, keep in mind that the table should be called USERS(in lower case).
 Otherwise, multiple errors can happen. And the same principle goes for tests and channels.
 """
+from MySQLdb import Error
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.utils import markdown as md
 from aiogram.utils.exceptions import BadRequest
 from assistants import Channel, \
@@ -17,9 +18,10 @@ from assistants import Channel, \
     User, \
     get_items_in_dict, get_percent, get_test_code, \
     item_has_space, \
-    names_valid, \
+    name_valid, \
     separate_by
-from MySQLdb import Error
+from openpyxl import Workbook
+from openpyxl.worksheet.table import Table, TableStyleInfo
 import MySQLdb as msdb
 import logging
 import re
@@ -62,12 +64,9 @@ else:
         fac.create_table(
             'users', 
             fac.integerfield('chat_id', 'bigint'), 
-            fac.charfield('fname', 150, long_text=True), 
-            fac.charfield('lname', 150, long_text=True), 
+            fac.charfield('name', 150, long_text=True), 
             fac.charfield('phone_number', 13),
-            fac.charfield('address', 200, long_text=True),
             fac.charfield('school', 100, long_text=True),
-            fac.charfield('class', 50),
             fac.charfield('username', 100, long_text=True), 
             fac.integerfield('is_superuser', 'tinyint'), 
             fac.integerfield('is_admin', 'tinyint'),
@@ -130,16 +129,12 @@ class Form(StatesGroup):
     
     add_test = State()
     add_channel = State()
-    address = State()
-    change_address = State()
-    change_class = State()
-    change_names = State()
+    change_name = State()
     change_phone_number = State()
     change_school = State()
-    class_ = State()
     delete_user = State()
     give_superuser = State()
-    names = State()
+    name = State()
     phone_number = State()
     school = State()
     stop_test = State()
@@ -151,9 +146,7 @@ class Form(StatesGroup):
 cancallable_states = (
     Form.add_test,
     Form.add_channel,
-    Form.change_address,
-    Form.change_class,
-    Form.change_names,
+    Form.change_name,
     Form.change_phone_number,
     Form.change_school,
     Form.delete_user,
@@ -184,100 +177,10 @@ async def cancel_states(message: types.Message, state: FSMContext):
     await state.finish()
 
 
-@dp.message_handler(state=Form.change_address)
-async def change_address(message: types.Message, state: FSMContext):
+@dp.message_handler(state=Form.change_name)
+async def change_name(message: types.Message, state: FSMContext):
     """
-    Changes the address of the request user.
-    """
-
-    current_state = await state.get_state()
-    if current_state is None:
-        return
-    
-    if len(message.text) < 100 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
-        user_model.change_address(
-            message.chat['id'], 
-            re.sub(r'[^a-zA-Z0-9,]', ' ', message.text)
-        )
-        await message.reply(
-            "Ajoyib\! Manzilingiz o'zgartirildi 🙂\n\n%s" % \
-            md.code('Owned by abduraxmonomonov.uz'),
-            parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
-        await state.finish()
-    else:
-        await message.reply(
-            "Iltimos, to'g'ri manzil kiriting\! Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
-            md.code('Owned by abduraxmonomonov.uz'),
-            parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
-
-
-@dp.callback_query_handler(lambda call: str(call.data) == 'change_address')
-async def change_address_state(callback_query: types.CallbackQuery):
-    """
-    Tells the user how to send their address and activates the CHANGE_ADDRESS state.
-    """
-
-    await Form.change_address.set()
-    await callback_query.message.answer(
-        "Manzilingizni kiriting\. Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
-        md.code("Owned by abduraxmonomonov.uz"),
-        parse_mode=types.ParseMode.MARKDOWN_V2,
-    )
-
-
-@dp.message_handler(state=Form.change_class)
-async def change_class(message: types.Message, state: FSMContext):
-    """
-    Changes the class of the request user.
-    """
-
-    current_state = await state.get_state()
-    if current_state is None:
-        return
-    
-    if len(message.text) <= 5 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
-        user_model.change_class(
-            message.chat['id'], 
-            re.sub(r'[^a-zA-Z0-9]', ' ', message.text),
-        )
-        await message.reply(
-            "Ajoyib\! Sinfingiz o'zgartirildi 🙂\n\n%s" % \
-            md.code('Owned by abduraxmonomonov.uz'),
-            parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
-        await state.finish()
-    else:
-        await message.reply(
-            "Iltimos, yuqorida eslatib o'tilgan qoidalarga rioya qilgan holda sinfni kiriting\! " \
-            "Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
-            md.code('Owned by abduraxmonomonov.uz'),
-            parse_mode=types.ParseMode.MARKDOWN_V2, 
-        )
-
-
-@dp.callback_query_handler(lambda call: str(call.data) == 'change_class')
-async def change_class_state(callback_query: types.CallbackQuery):
-    """
-    Tells the user how to send their class and activates the CHANGE_CLASS state.
-    """
-
-    await Form.change_class.set()
-    await callback_query.message.answer(
-        "Sinfingizni kiriting\. Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s\n\n%s" % \
-        (
-            md.underline("⚠️Harflar va sonlar uzunligi birgalikda 5tadan oshmasligi kerakligini unutmang⚠️"),
-            md.code("Owned by abduraxmonomonov.uz"),
-        ),
-        parse_mode=types.ParseMode.MARKDOWN_V2,
-    )
-
-
-@dp.message_handler(state=Form.change_names)
-async def change_names(message: types.Message, state: FSMContext):
-    """
-    Changes the information (only first and last names) of the request user.
+    Changes the information (only name) of the request user.
     """
 
     current_state = await state.get_state()
@@ -285,14 +188,8 @@ async def change_names(message: types.Message, state: FSMContext):
         return
     
     splitted = message.text.split()
-    if len(splitted) == 2 and item_has_space(splitted) is False and names_valid(splitted) is True:
-        names = {}
-        for name in splitted:
-            if name.startswith('I:') or name.startswith('i:'):
-                names['first_name'] = name.lower().lstrip('i:').strip()
-            elif name.startswith('F:') or name.startswith('f:'):
-                names['last_name'] = name.lower().lstrip('f:').strip()
-        user_model.change_name(message.chat['id'], names['first_name'].title(), names['last_name'].title())
+    if len(splitted) < 10 and name_valid(splitted) is True:
+        user_model.change_name(message.chat['id'], re.sub(r"[-_'’<>=\\/+|;%*#]", '', message.text))
         await message.reply(
             "Ma'lumotlar o'zgartirildi 🙂\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
@@ -300,27 +197,23 @@ async def change_names(message: types.Message, state: FSMContext):
         await state.finish()
     else:
         await message.reply(
-            "Familiya va ismingizni yuqorida aytilgandek kiritmaganga o'xshaysiz 🤨\n\n" \
-            "Eslatib o'taman familiyangizni oldidan 'f:' ismingizni oldidan esa 'i:' kiritishingiz\n\n" \
+            "Ism familiya noto'g'ri kiritildi 🤨\n\n" \
             "Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
 
 
-@dp.callback_query_handler(lambda call: str(call.data) == 'change_names')
-async def change_names_state(callback_query: types.CallbackQuery):
+@dp.callback_query_handler(lambda call: str(call.data) == 'change_name')
+async def change_name_state(callback_query: types.CallbackQuery):
     """
-    Tells the user how to send their names and activates the CHANGE_NAMES state.
+    Tells the user how to send their name and activates the CHANGE_name state.
     """
 
-    await Form.change_names.set()
+    await Form.change_name.set()
     await callback_query.message.answer(
-        "Familiyangiz va ismingizni kiriting\. Ismlarda belgi va sonlarga yo'l qo'yilmasligini ham yodda tuting\. " \
-        "Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s\n\n%s" % \
-        (
-            md.underline("⚠️Familiya oldidan 'f:' va ism oldidan 'i:' belgilarini qo'yishni unutmang⚠️"),
-            md.code("Owned by abduraxmonomonov.uz"),
-        ),
+        "Ism familiyangizni kiriting\.\n\n" \
+        "Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
+        md.code("Owned by abduraxmonomonov.uz"),
         parse_mode=types.ParseMode.MARKDOWN_V2,
     )
 
@@ -335,7 +228,11 @@ async def change_phone_number(message: types.Message, state: FSMContext):
     if current_state is None:
         return
     
-    if message.text.startswith('+998') is True and message.text[1:].isdigit() is True and len(message.text) == 13:
+    if (
+            ((str(message.text).startswith('+') and message.text[1:].isdigit() is True) or 
+            message.text[1:].isdigit() is True) and 
+            len(message.text) <= 20
+    ):
         user_model.change_phone_number(message.chat['id'], message.text)
         await message.reply(
             "Ajoyib\! Telefon raqamingiz o'zgartirildi 🙂\n\n%s" % \
@@ -345,7 +242,7 @@ async def change_phone_number(message: types.Message, state: FSMContext):
         await state.finish()
     else:
         await message.reply(
-            "Telefon raqamingizni yuqorida ko'rsatilgan formatda kiritmaganga o'xshaysiz 🤨\n" \
+            "Telefon raqam noto'g'ri kiritildi 🤨\n\n" \
             "Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
@@ -360,11 +257,8 @@ async def change_phone_number_state(callback_query: types.CallbackQuery):
 
     await Form.change_phone_number.set()
     await callback_query.message.answer(
-        "Telefon raqamingizni kiriting\. Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s\n\n%s" % \
-        (
-            md.underline("⚠️Telefon raqamni +998901234567 formatida kiritishni unutmang⚠️"),
-            md.code("Owned by abduraxmonomonov.uz"),
-        ),
+        "Telefon raqamingizni kiriting\.\n\nBekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
+        md.code("Owned by abduraxmonomonov.uz"),
         parse_mode=types.ParseMode.MARKDOWN_V2,
     )
 
@@ -382,16 +276,16 @@ async def change_school(message: types.Message, state: FSMContext):
     if len(message.text) < 50 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
         user_model.change_school(
             message.chat['id'], 
-            re.sub(r'[^a-zA-Z0-9,]', ' ', message.text),
+            re.sub(r"[-_'’<>=\\/+|;%*#]", ' ', message.text),
         )
         await message.reply(
-            "Ajoyib\! Maktabingiz o'zgartirildi 🙂\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
+            "Ajoyib\! Maktab va singfingiz o'zgartirildi 🙂\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
         await state.finish()
     else:
         await message.reply(
-            "Iltimos, yuqorida eslatib o'tilgan qoidalarga rioya qilgan holda maktabni kiriting\! " \
+            "Maktab va sinf noto'g'ri kiritildi 🤨\n\n" \
             "Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
@@ -406,11 +300,8 @@ async def change_school_state(callback_query: types.CallbackQuery):
 
     await Form.change_school.set()
     await callback_query.message.answer(
-        "Maktabingizni kiriting\. Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s\n\n%s" % \
-        (
-            md.underline("⚠️Harflar va sonlar uzunligi birgalikda 50tadan oshmasligi kerakligini unutmang⚠️"),
-            md.code("Owned by abduraxmonomonov.uz"),
-        ),
+        "Maktab va sinfingizni kiriting\.\n\nBekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
+        md.code("Owned by abduraxmonomonov.uz"),
         parse_mode=types.ParseMode.MARKDOWN_V2,
     )
 
@@ -439,7 +330,7 @@ async def check_subscription(callback_query: types.CallbackQuery):
                         "Endi ma'lumotlaringizni kiritib botdan foydalanishingiz mumkin 🙂",
                         show_alert=True,
                     )
-                    await no_names(callback_query.message)
+                    await no_name(callback_query.message)
                 else:
                     await callback_query.answer(
                         "Obuna bo'lganingiz uchun rahmat!\n" \
@@ -462,44 +353,37 @@ async def check_test(message: types.Message, state: FSMContext):
     if (
             len(splitted_message[0]) == 5 and
             splitted_message[0].isdigit() and
-            len(splitted_message) == 3 and 
-            splitted_message[1] != '' and
-            item_has_space(splitted_message) is False and not 
-            re.findall(r'[^a-zA-Z]', str(splitted_message[2]).lower())
+            len(splitted_message) == 2 and 
+            splitted_message[1] != '' and not 
+            re.findall(r'[^a-zA-Z]\s', str(splitted_message[1]).lower())
     ):
         test_id = int(splitted_message[0])
-        test_subject = str(splitted_message[1]).lower()
-        answers = str(splitted_message[2]).lower()
+        # test_subject = str(splitted_message[1]).lower()
+        answers = str(splitted_message[1]).lower().strip()
         check_answers = separate_by(answers, ',').split(',')
         test_ = test.get_test(test_id)
         if test_ is None:
             await message.reply(
-                "%s raqamli test topilmadi\!\n\n%s" % (test_id, md.code('Owned by abduraxmonomonov.uz')),
+                "%s raqamli test topilmadi\!\n\nBekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
+                (test_id, md.code('Owned by abduraxmonomonov.uz')),
                 parse_mode=types.ParseMode.MARKDOWN_V2,
             )
         else:
-            if test_subject == str(test_['test_subject']).lower():
-                if len(check_answers) == len(str(test_['answers']).split(',')):
-                    if test_['is_active'] is True:
-                        correct_answers = get_items_in_dict(str(test_['answers']).split(','))
-                        answers = get_items_in_dict(separate_by(answers, ',').split(','))
-                        await check_results(message, test_id, answers, correct_answers)
-                        await state.finish()
-                    else:
-                        await message.reply(
-                            "%s raqamli test to'xtatilgan\!\n\n%s" % \
-                            (test_id, md.code('Owned by abduraxmonomonov.uz')),
-                            parse_mode=types.ParseMode.MARKDOWN_V2,
-                        )
+            if len(check_answers) == len(str(test_['answers']).split(',')):
+                if test_['is_active'] is True:
+                    correct_answers = get_items_in_dict(str(test_['answers']).split(','))
+                    answers = get_items_in_dict(separate_by(answers, ',').split(','))
+                    await check_results(message, test_id, answers, correct_answers)
+                    await state.finish()
                 else:
                     await message.reply(
-                        "%s raqamli test savollari soni bilan sizning javoblaringizni soni bir xil emas 🤨\n\n%s" % \
+                        "%s raqamli test to'xtatilgan\!\n\n%s" % \
                         (test_id, md.code('Owned by abduraxmonomonov.uz')),
                         parse_mode=types.ParseMode.MARKDOWN_V2,
                     )
             else:
                 await message.reply(
-                    "%s raqamli test mavjud, biroq fan nomi noto'g'ri 🤨\n\n%s" % \
+                    "%s raqamli test savollari soni bilan sizning javoblaringizni soni bir xil emas 🤨\n\n%s" % \
                     (test_id, md.code('Owned by abduraxmonomonov.uz')),
                     parse_mode=types.ParseMode.MARKDOWN_V2,
                 )
@@ -527,7 +411,7 @@ async def deny_admin(callback_query: types.CallbackQuery):
         reply_markup=kb,
     )
     await callback_query.message.answer(
-        f"{user['first_name']} {user['last_name']}'ga test kiritish huquqini berish rad etildi ⛔️\n\n" \
+        f"{user['name']}'ga test kiritish huquqini berish rad etildi ⛔️\n\n" \
         f"{md.code('Owned by abduraxmonomonov.uz')}",
         parse_mode=types.ParseMode.MARKDOWN_V2,
     )
@@ -545,7 +429,7 @@ async def get_admin(message: types.Message):
     
     if user is None:
         if latest_channel is None:
-            await no_names(message)
+            await no_name(message)
         else:
             try:
                 result = await bot.get_chat_member(latest_channel['username'], message.chat['id'])
@@ -555,7 +439,7 @@ async def get_admin(message: types.Message):
                 if result['status'] == 'left':
                     await no_subscription(message)
                 else:
-                    await no_names(message)
+                    await no_name(message)
     else:
         if latest_channel is None:
             if user['is_superuser'] is False and user['is_admin'] is False:
@@ -569,7 +453,7 @@ async def get_admin(message: types.Message):
                 for suser in superusers:
                     await bot.send_message(
                         suser['chat_id'],
-                        f"{user['first_name']} {user['last_name']} test kiritish huquqini so'ramoqda\.\n\n" \
+                        f"{user['name']} test kiritish huquqini so'ramoqda\.\n\n" \
                         f"{md.code('Owned by abduraxmonomonov.uz')}",
                         parse_mode=types.ParseMode.MARKDOWN_V2,
                         reply_markup=giveAdminBtns,
@@ -604,7 +488,7 @@ async def get_admin(message: types.Message):
                         for superuser in superusers:
                             await bot.send_message(
                                 superuser['chat_id'],
-                                f"{user['first_name']} {user['last_name']} test kiritish huquqini so'ramoqda\.\n\n" \
+                                f"{user['name']} test kiritish huquqini so'ramoqda\.\n\n" \
                                 f"{md.code('Owned by abduraxmonomonov.uz')}",
                                 parse_mode=types.ParseMode.MARKDOWN_V2,
                                 reply_markup=giveAdminBtns,
@@ -633,7 +517,7 @@ async def give_admin(callback_query: types.CallbackQuery):
         user_model.promote_to_admin(chat_id)
     except AttributeError:
         await callback_query.answer(
-            f"{user['first_name']} {user['last_name']}ga allaqachon 'admin' unvoni berilgan!", show_alert=True,
+            f"{user['name']}ga allaqachon 'admin' unvoni berilgan!", show_alert=True,
         )
     else:
         await bot.send_message(
@@ -644,7 +528,7 @@ async def give_admin(callback_query: types.CallbackQuery):
             reply_markup=admin_kb,
         )
         await callback_query.message.answer(
-            f"{user['first_name']} {user['last_name']}'ga test kiritish huquqi taqdim etildi ✅\n\n" \
+            f"{user['name']}'ga test kiritish huquqi taqdim etildi ✅\n\n" \
             f"{md.code('Owned by abduraxmonomonov.uz')}",
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
@@ -687,7 +571,7 @@ async def my_info(message: types.Message, state: FSMContext):
         user = user_model.get_user_or_users('chat_id', message.chat['id'])
         if user is None:
             if latest_channel is None:
-                await no_names(message)
+                await no_name(message)
             else:
                 try:
                     result = await bot.get_chat_member(latest_channel['username'], message.chat['id'])
@@ -697,7 +581,7 @@ async def my_info(message: types.Message, state: FSMContext):
                     if result['status'] == 'left':
                         await no_subscription(message)
                     else:
-                        await no_names(message)
+                        await no_name(message)
         else:
             if user['is_superuser'] is True and user['is_admin'] is True:
                 await send_user_info(message, user)
@@ -729,7 +613,7 @@ async def open_menu(message: types.Message, state: FSMContext):
         user = user_model.get_user_or_users('chat_id', message.chat['id'])
         if user is None:
             if latest_channel is None:
-                await no_names(message)
+                await no_name(message)
             else:
                 try:
                     result = await bot.get_chat_member(latest_channel['username'], message.chat['id'])
@@ -739,7 +623,7 @@ async def open_menu(message: types.Message, state: FSMContext):
                     if result['status'] == 'left':
                         await no_subscription(message)
                     else:
-                        await no_names(message)
+                        await no_name(message)
         else:
             if latest_channel is None:
                 await show_appropriate_panel(message, user['is_superuser'], user['is_admin'])
@@ -755,66 +639,40 @@ async def open_menu(message: types.Message, state: FSMContext):
                         await show_appropriate_panel(message, user['is_superuser'], user['is_admin'])
 
 
-@dp.message_handler(state=Form.address)
-async def register_address(message: types.Message, state: FSMContext):
+@dp.message_handler(state=Form.name)
+async def register_name(message: types.Message, state: FSMContext):
     """
-    Gets the user's address and saves it to the database.
+    Gets the user's name and saves them to the database.
     """
 
     current_state = await state.get_state()
     if current_state is None:
         return
-    
-    if (
-            len(message.text) < 100 and len(message.text) > 10 and
-            message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂' and 
-            message.text != '/cancel'
-    ):
-        user_model.change_address(
+
+    splitted = message.text.split()
+    if len(splitted) < 10 and name_valid(splitted) is True:
+        columns = ['chat_id', 'name', 'username', 'is_superuser', 'is_admin']
+        values = [
             message.chat['id'], 
-            re.sub(r'[^a-zA-Z0-9,]', ' ', message.text)
-        )
+            re.sub(r"[-_'’<>=\\/+|;%*#]", '', message.text), 
+            str(message.chat['username']).replace('_', '\_'), 
+            1 if message.chat['id'] == bot_owner_id else 0, 
+            1 if message.chat['id'] == bot_owner_id else 0, 
+        ]
+        sk.get_supplies('users', columns, values)
         await message.reply(
-            "Juda soz, endi ayni damda o'zingiz ta'lim olayotgan maktabni yoki farzandingiz ta'lim " \
-            "olayotgan maktabni kiriting\. Harflar va sonlarni birgalikdagi uzunligi 50tadan oshib ketmasligini ham " \
-            f"ta'minlang\!\n\n Misol \-\> {md.code('Qarshi shahri, 15-maktab')}\n\n " \
+            f"Tanishganimdan xursandman\!\n\n" \
+            f"Endi telefon raqamingizni kiriting\n\n" \
             f"{md.code('Owned by abduraxmonomonov.uz')}",
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
         await state.finish()
-        await Form.school.set()
+        await Form.phone_number.set()
     else:
         await message.reply(
-            "Iltimos, to'g'ri manzil kiriting\!\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
-            parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
-
-
-@dp.message_handler(state=Form.class_)
-async def register_class(message: types.Message, state: FSMContext):
-    """
-    Gets the class where the user or their children study and saves it to the database.
-    """
-
-    current_state = await state.get_state()
-    if current_state is None:
-        return
-    
-    if len(message.text) <= 5 and len(message.text) >= 2 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
-        user_model.change_class(message.chat['id'], re.sub(r'[^a-zA-Z0-9,]', ' ', message.text.upper()))
-        await message.reply(
-            "Ajoyib\-u g'aroyib\! Ma'lumotlaringiz saqlandi endi botdan foydalanishingiz mumkin 🙂\n\n" \
-            "Eslatma: Yuqorida olingan barcha ma'lumotlar xizmat sifatini yaxshilash uchun xizmat qiladi va ma'sul " \
-            "shaxslardan boshqa hech kimning qo'liga tushmasligi kafolatlanadi\!\n\n%s" % \
+            "Ism familiya noto'g'ri kiritildi 🤨\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
-        await state.finish()
-    else:
-        await message.reply(
-            "Iltimos, yuqorida eslatib o'tilgan qoidalarga rioya qilgan holda sinfni kiriting\!\n\n%s" % \
-            md.code('Owned by abduraxmonomonov.uz'),
-            parse_mode=types.ParseMode.MARKDOWN_V2, 
         )
 
 
@@ -828,18 +686,23 @@ async def register_phone_number(message: types.Message, state: FSMContext):
     if current_state is None:
         return
     
-    if message.text.startswith('+998') is True and message.text[1:].isdigit() is True and len(message.text) == 13:
-        user_model.change_phone_number(message.chat['id'], message.text)
+    if (
+            ((str(message.text).startswith('+') and message.text[1:].isdigit() is True) or 
+            message.text[1:].isdigit() is True) and 
+            len(message.text) <= 20
+    ):
+        user_model.change_phone_number(message.chat['id'], re.sub(r"[-_'’<>=\\/|;%*#]", ' ', message.text))
         await message.reply(
-            "Ajoyib\! Telefon raqamingiz ham saqlandi\. Navbat manzilingizga, manzilingizni kiriting\.\n\n%s" % \
+            "Ajoyib\! Telefon raqamingiz ham saqlandi\. " \
+            "Navbat maktab va sinfingizga, maktab va sinfingizni kiriting\.\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
         await state.finish()
-        await Form.address.set()
+        await Form.school.set()
     else:
         await message.reply(
-            "Telefon raqamingizni yuqorida ko'rsatilgan formatda kiritmaganga o'xshaysiz 🤨\n\n%s" % \
+            "Telefon raqam noto'g'ri kiritildi 🤨\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
@@ -858,63 +721,15 @@ async def register_school(message: types.Message, state: FSMContext):
     if len(message.text) < 50 and message.text[-1] not in '👤📄👨🏻‍✈️📊➕⛔️✅🤨🗂':
         user_model.change_school(message.chat['id'], re.sub(r'[^a-zA-Z0-9,]', ' ', message.text))
         await message.reply(
-            "Maktabingiz saqlandi 🙂, va nihoyat so'nggi qadam, maktabdagi sinfingizni yoki farzandingizni sinfini " \
-            "kiriting\. Shuningdek, harflar va sonlarning birgalikdagi uzunligi 5tadan oshib ketmasligi kerak " \
-            "ekanligini ham yodda tuting\!\n\n Misol \-\> %s\n\n%s" % \
-            (md.code('3V'), md.code('Owned by abduraxmonomonov.uz')),
-            parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
-        await state.finish()
-        await Form.class_.set()
-    else:
-        await message.reply(
-            "Iltimos, yuqorida eslatib o'tilgan qoidalarga rioya qilgan holda maktabni kiriting\!\n\n%s" % \
+            "Ajoyib so'nggi ma'lumotlar ham saqlandi\!\n\nBotdan foydalanishingiz mumkin 🙂\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
-            parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
-
-
-@dp.message_handler(state=Form.names)
-async def register_names(message: types.Message, state: FSMContext):
-    """
-    Gets the user's first and last names and saves them to the database.
-    """
-
-    current_state = await state.get_state()
-    if current_state is None:
-        return
-
-    splitted = message.text.split()
-    if len(splitted) == 2 and item_has_space(splitted) is False and names_valid(splitted) is True:
-        names = {}
-        for name in splitted:
-            if name.startswith('I:') or name.startswith('i:'):
-                names['first_name'] = name.lower().lstrip('i:').strip()
-            elif name.startswith('F:') or name.startswith('f:'):
-                names['last_name'] = name.lower().lstrip('f:').strip()
-        columns = ['chat_id', 'fname', 'lname', 'username', 'is_superuser', 'is_admin']
-        values = [
-            message.chat['id'], 
-            names['first_name'].title(), 
-            names['last_name'].title(), 
-            str(message.chat['username']).replace('_', '\_'), 
-            1 if message.chat['id'] == bot_owner_id else 0,
-            1 if message.chat['id'] == bot_owner_id else 0,
-        ]
-        sk.get_supplies('users', columns, values)
-        await message.reply(
-            f"Tanishganimdan xursandman, {names['first_name'].title()}\!\n\n" \
-            f"Endi telefon raqamingizni \+998901234567 formatida kiriting \n\n " \
-            f"{md.code('Owned by abduraxmonomonov.uz')}",
             parse_mode=types.ParseMode.MARKDOWN_V2,
             reply_markup=kb,
         )
         await state.finish()
-        await Form.phone_number.set()
     else:
         await message.reply(
-            "Ism familiyangizni yuqoridagi misolda ko'rsatilgan formatda kiritmaganga o'xshaysiz 🤨\. " \
-            "Ismlarda belgi va sonlarga yo'l qo'yilmasligini ham yodda tuting\.\n\n%s" % \
+            "Maktab va sinf noto'g'ri kiritildi 🤨\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
@@ -931,7 +746,7 @@ async def set_test_checking_state(message: types.Message):
 
     if user is None:
         if latest_channel is None:
-            await no_names(message)
+            await no_name(message)
         else:
             try:
                 result = await bot.get_chat_member(latest_channel['username'], message.chat['id'])
@@ -941,7 +756,7 @@ async def set_test_checking_state(message: types.Message):
                 if result['status'] == 'left':
                     await no_subscription(message)
                 else:
-                    await no_names(message)
+                    await no_name(message)
     else:
         if latest_channel is None:
             await get_test_answers(message)
@@ -969,7 +784,7 @@ async def welcome_user(message: types.Message, state: FSMContext):
         user = user_model.get_user_or_users('chat_id', message.chat['id'])
         if user is None:
             if latest_channel is None:
-                await no_names(message)
+                await no_name(message)
             else:
                 try:
                     result = await bot.get_chat_member(latest_channel['username'], message.chat['id'])
@@ -979,12 +794,12 @@ async def welcome_user(message: types.Message, state: FSMContext):
                     if result['status'] == 'left':
                         await no_subscription(message)
                     else:
-                        await no_names(message)
+                        await no_name(message)
         else:
             is_superuser = user['is_superuser']
             is_admin = user['is_admin']
             if latest_channel is None:
-                text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['first_name']
+                text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['name']
                 text2 = "Sizni qayta ko'rib turganimdan xursandman 🙂\n\n%s" % md.code("Owned by abduraxmonomonov.uz")
                 await message.reply(text + text2, parse_mode=types.ParseMode.MARKDOWN_V2)
                 await show_appropriate_panel(message, is_superuser, is_admin)
@@ -992,7 +807,7 @@ async def welcome_user(message: types.Message, state: FSMContext):
                 try:
                     result = await bot.get_chat_member(latest_channel['username'], message.chat['id'])
                 except BadRequest:
-                    text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['first_name']
+                    text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['name']
                     text2 = "Sizni qayta ko'rib turganimdan xursandman 🙂 " \
                     "Biroq, Kanalimizdan chiqib ketganga o'xshaysiz 🤨" \
                     "Botdan foydalanishni davom etish uchun qayta obuna bo'ling\.\n\n%s" % \
@@ -1006,7 +821,7 @@ async def welcome_user(message: types.Message, state: FSMContext):
                     await message.reply(text + text2, parse_mode=types.ParseMode.MARKDOWN_V2, reply_markup=subscribeBtns)
                 else:
                     if result['status'] == 'left':
-                        text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['first_name']
+                        text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['name']
                         text2 = "Sizni qayta ko'rib turganimdan xursandman 🙂 " \
                         "Biroq, Kanalimizdan chiqib ketganga o'xshaysiz 🤨" \
                         "Botdan foydalanishni davom etish uchun qayta obuna bo'ling\.\n\n%s" % \
@@ -1026,7 +841,7 @@ async def welcome_user(message: types.Message, state: FSMContext):
                             reply_markup=subscribeBtns
                         )
                     else:
-                        text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['first_name']
+                        text = "Assalomu alaykum, %s\! 👋🏻\n\n" % user['name']
                         text2 = "Sizni qayta ko'rib turganimdan xursandman 🙂\n\n%s" % \
                         md.code("Owned by abduraxmonomonov.uz")
                         await message.reply(text + text2, parse_mode=types.ParseMode.MARKDOWN_V2)
@@ -1037,7 +852,7 @@ async def welcome_user(message: types.Message, state: FSMContext):
 @dp.message_handler(state=Form.give_superuser)
 async def give_superuser(message: types.Message, state: FSMContext):
     """
-    Promotes the user with the given names to a superuser.
+    Promotes the user with the given name to a superuser.
     """
 
     current_state = await state.get_state()
@@ -1045,26 +860,18 @@ async def give_superuser(message: types.Message, state: FSMContext):
         return
 
     splitted = message.text.split()
-    if len(splitted) == 2 and item_has_space(splitted) is False and names_valid(splitted) is True:
-        names = {}
-        for name in splitted:
-            if name.startswith('I:') or name.startswith('i:'):
-                names['first_name'] = name.lower().lstrip('i:').strip()
-            elif name.startswith('F:') or name.startswith('f:'):
-                names['last_name'] = name.lower().lstrip('f:').strip()
-        first_name = names['first_name'].title()
-        last_name = names['last_name'].title()
-        user = user_model.get_user_by_name(first_name, last_name)
+    if len(splitted) < 10 and name_valid(splitted) is True:
+        user = user_model.get_user_by_name(re.sub(r"[-_'’<>=\\/+|;%*#]", '', message.text))
         if user is None:
             await message.reply(
-                f"{first_name} {last_name} ismli foydalanuvchi bazada mavjud emas!"
+                f"{message.text} ismli foydalanuvchi bazada mavjud emas!"
             )
         else:
             try:
                 user_model.promote_to_superuser(user['chat_id'])
             except AttributeError:
                 await message.reply(
-                    f"{user['first_name']} {user['last_name']}ga allaqachon oliy admin unvoni berilgan!",
+                    f"{user['name']}ga allaqachon oliy admin unvoni berilgan!",
                 )
             else:
                 await bot.send_message(
@@ -1075,7 +882,7 @@ async def give_superuser(message: types.Message, state: FSMContext):
                     reply_markup=superuser_kb,
                 )
                 await message.reply(
-                    f"{first_name} {last_name} ismli foydalanuvchi oliy admin darajasiga oshirildi."
+                    f"{message.text} ismli foydalanuvchi oliy admin darajasiga oshirildi."
                 )
                 await state.finish()
     else:
@@ -1096,12 +903,11 @@ async def give_superuser_state(message: types.Message):
     if user['is_superuser'] is True and user['is_admin'] is True and user['chat_id'] == bot_owner_id:
         await Form.give_superuser.set()
         await message.reply(
-            "Foydalanuvchi familiyasi va ismini kiriting.\n\n " \
-            "⚠️Familiya oldidan 'f:' va ism oldidan 'i:' belgilarini qo'yishni unutmang⚠️"
+            "Foydalanuvchi ism va familiyasini kiriting."
         )
     else:
         await message.reply(
-            "Ushbu funksiyadan foydalanish uchun sizda yetarlicha huquqlar mavjud emas\!\n\n%s" % \
+            "Ushbu funktsiyadan foydalanish uchun sizda yetarlicha huquqlar mavjud emas\!\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
@@ -1165,7 +971,7 @@ async def check_channel_name(message: types.Message, state: FSMContext):
                 )
         else:
             await message.reply(
-                "Kiritilgan kanal bazada mavjud\!\n\n Bekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
+                "Kiritilgan kanal bazada mavjud\!\n\nBekor qilish uchun /cancel buyrug'ini kiriting\.\n\n%s" % \
                 md.code('Owned by abduraxmonomonov.uz'),
                 parse_mode=types.ParseMode.MARKDOWN_V2,
             )
@@ -1225,14 +1031,8 @@ async def delete_user(message: types.Message, state: FSMContext):
         return
     
     splitted = message.text.split()
-    if len(splitted) == 2 and item_has_space(splitted) is False and names_valid(splitted) is True:
-        names = {}
-        for name in splitted:
-            if name.startswith('I:') or name.startswith('i:'):
-                names['first_name'] = name.lower().lstrip('i:').strip()
-            elif name.startswith('F:') or name.startswith('f:'):
-                names['last_name'] = name.lower().lstrip('f:').strip()
-        user = user_model.get_user_by_name(names['first_name'], names['last_name'])
+    if len(splitted) < 10 and name_valid(splitted) is True:
+        user = user_model.get_user_by_name(re.sub(r"[-_'’<>=\\/+|;%*#]", '', message.text))
         if user:
             user_model.delete_user(user['chat_id'])
             await message.reply(
@@ -1243,14 +1043,13 @@ async def delete_user(message: types.Message, state: FSMContext):
             await state.finish()
         else:
             await message.reply(
-                f"{user['last_name']} {user['first_name']} nomli foydalanuvchi topilmadi\.\n\n" \
+                f"{message.text} nomli foydalanuvchi topilmadi\.\n\n" \
                 f"{md.code('Owned by abduraxmonomonov.uz')}",
                 parse_mode=types.ParseMode.MARKDOWN_V2,
             )
     else:
         await message.reply(
-            "Ism familiyangizni yuqoridagi aytilgandek kiritmaganga o'xshaysiz 🤨\. " \
-            "Ismlarda belgi va sonlarga yo'l qo'yilmasligini ham yodda tuting\.\n\n%s" % \
+            "Ism va familiya noto'g'ri kiritildi 🤨\n\n%s" % \
             md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
@@ -1266,11 +1065,8 @@ async def delete_user_state(message: types.Message):
     if user['is_superuser']:
         await Form.delete_user.set()
         await message.reply(
-            "Foydalanuvchining familiya va ismini kiriting\.\n\n%s\n\n%s" % \
-            (
-                "⚠️Familiya oldidan 'f:' va ism oldidan 'i:' belgilarini qo'yishni unutmang⚠️",
-                md.code('Owned by abduraxmonomonov.uz')
-            ),
+            "Foydalanuvchining ism va familiyasini kiriting\.\n\n%s" % \
+            md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
     else:
@@ -1287,23 +1083,34 @@ async def get_users(message: types.Message):
 
     if user is not None and (user['is_superuser'] is True or user['chat_id'] == bot_owner_id):
         users = user_model.get_user_or_users(all=True)
-        out_msg = ''
-        for usr in users:
-            class_ = str(usr['class']).replace('-', '\-')
-            username = '@' + usr['username'] if usr['username'] != "Mavjud emas" else md.underline(usr['username'])
-            out_msg += f"{users.index(usr) + 1}\. {usr['first_name']} {usr['last_name']}\n" \
-            f"📞Telefon raqam: \{usr['phone_number']}\n📍Manzil: {usr['address']}\n🏫Maktab: {usr['school']}\n" \
-            f"🚪Sinf: {class_}\n🔗Foydalanuvchi nomi: {username}\n\n"
-        await message.reply(
-            "%s holatiga ko'ra, botdan %dta foydalanuvchi foydalanmoqda\.\n\n %s%s" % \
-            (
-                time.strftime(r"%Y/%m/%d %H:%M:%S", time.localtime()),
-                len(users),
-                out_msg,
-                md.code('Owned by abduraxmonomonov.uz'),
-            ),
-            parse_mode=types.ParseMode.MARKDOWN_V2,
-        )
+        wb = Workbook()
+        wsh = wb.active
+        tab = Table(displayName='Users', ref=f'A1:E{len(users) + 1}')
+        style = TableStyleInfo(name='TableStyleMedium15')
+        tab.tableStyleInfo = style
+        for index, usr in enumerate(users):
+            index += 1
+            wsh['A1'] = "№"
+            wsh['B1'] = "Ismi va familiyasi"
+            wsh['C1'] = "Telefon raqami"
+            wsh['D1'] = "Maktab va sinfi"
+            wsh['E1'] = "Foydalanuvchi nomi"
+            wsh[f"A{index + 1}"] = index
+            wsh[f"B{index + 1}"] = usr['name'].title()
+            wsh[f"C{index + 1}"] = usr['phone_number']
+            wsh[f"D{index + 1}"] = usr['school']
+            wsh[f"E{index + 1}"] = usr['username']
+            wsh.column_dimensions['A'].width = 3
+            wsh.column_dimensions['B'].width = 25
+            wsh.column_dimensions['C'].width = 20
+            wsh.column_dimensions['D'].width = 30
+            wsh.column_dimensions['E'].width = 20
+        wsh.add_table(tab)
+        wb.save('users.xlsx')
+        file = InputFile('users.xlsx')
+        caption = f"{time.strftime(r'%Y/%m/%d %H:%M:%S', time.localtime())} " \
+        "holatiga ko'ra %dta foydalanuvchi mavjud\.\n\n%s" % (len(users), md.code('Owned by abduraxmonomonov.uz'))
+        await message.reply_document(file, caption=caption, parse_mode=types.ParseMode.MARKDOWN_V2)
     else:
         await unknown_command(message)
 
@@ -1337,29 +1144,43 @@ async def show_tests(message: types.Message):
     if user is not None and (user['is_superuser'] is True or message.chat['id'] == bot_owner_id):
         tests = test.get_tests()
         if tests:
-            out_msg = f"""{time.strftime(r"%Y/%m/%d %H:%M:%S", time.localtime())} holatiga ko'ra """ \
-            f'{len(tests)}ta test mavjud\.\n\n'
-            for test_ in tests:
-                answers = \
-                '  '.join(
-                    [f'{index + 1}\.{str(value).upper()}' for index, value in enumerate(str(test_['answers']).split(','))]
-                )
-                date_ended = str(test_['date_deactivated']).replace('-', '/')
-                date_deactivated = "to'xtatilmagan" if test_['is_active'] is True else date_ended
-                test_info = f"🔢 Test raqami: {md.bold(test_['test_id'])}\n" \
-                f"📔 Test fani: {str(test_['test_subject']).title().replace('_', ' ')}\n" \
-                f"👨🏻‍🏫 Tuzuvchi: {test_['creator']}\n" \
-                f"✅ Javoblar: {answers}\n" \
-                f"📅 Tuzilgan sana: {str(test_['date_created']).replace('-', '/')}\n" \
-                f"⛔️ To'xtatilgan sana: {date_deactivated}\n\n"
-                out_msg += test_info
-            await message.reply(
-                out_msg + md.code('Owned by abduraxmonomonov.uz'), 
-                parse_mode=types.ParseMode.MARKDOWN_V2,
-            )
+            wb = Workbook()
+            wsh = wb.active
+            tab = Table(displayName='Tests', ref=f'A1:G{len(tests) + 1}')
+            style = TableStyleInfo(name='TableStyleMedium15')
+            tab.tableStyleInfo = style
+            for index, test_ in enumerate(tests):
+                index += 1
+                wsh['A1'] = "№"
+                wsh['B1'] = "Test ID"
+                wsh['C1'] = "Test fani"
+                wsh['D1'] = "Tuzuvchi"
+                wsh['E1'] = "Javoblar"
+                wsh['F1'] = "Tuzilgan sana"
+                wsh['G1'] = "To'xtatilgan sana"
+                wsh[f"A{index + 1}"] = index
+                wsh[f"B{index + 1}"] = test_['test_id']
+                wsh[f"C{index + 1}"] = test_['test_subject'].title().replace('_', ' ')
+                wsh[f"D{index + 1}"] = test_['creator'].title()
+                wsh[f"E{index + 1}"] = test_['answers'].upper()
+                wsh[f"F{index + 1}"] = test_['date_created']
+                wsh[f"G{index + 1}"] = "To'xtatilmagan" if test_['is_active'] is True else test_['date_deactivated']
+                wsh.column_dimensions['A'].width = 3
+                wsh.column_dimensions['B'].width = 10
+                wsh.column_dimensions['C'].width = 25
+                wsh.column_dimensions['D'].width = 30
+                wsh.column_dimensions['E'].width = 30
+                wsh.column_dimensions['F'].width = 20
+                wsh.column_dimensions['G'].width = 20
+            wsh.add_table(tab)
+            wb.save('tests.xlsx')
+            file = InputFile('tests.xlsx')
+            caption = f"{time.strftime(r'%Y/%m/%d %H:%M:%S', time.localtime())} " \
+            "holatiga ko'ra %dta test mavjud\.\n\n%s" % (len(tests), md.code('Owned by abduraxmonomonov.uz'))
+            await message.reply_document(file, caption=caption, parse_mode=types.ParseMode.MARKDOWN_V2)
         else:
             await message.reply(
-                f"""{time.strftime(r"%Y/%m/%d %H:%M:%S", time.localtime())} holatiga ko'ra 0ta testlar mavjud\.\n\n""" \
+                f"""{time.strftime(r"%Y/%m/%d %H:%M:%S", time.localtime())} holatiga ko'ra 0ta test mavjud\.\n\n""" \
                 f"Testlar hali kiritilmagan 😕\n\n{md.code('Owned by abduraxmonomonov.uz')}",
                 parse_mode=types.ParseMode.MARKDOWN_V2,
             )
@@ -1384,7 +1205,7 @@ async def add_test(message: types.Message, state: FSMContext):
         ids = test.get_all_test_ids()
         test_id = get_test_code(5, ids)
         test_subject = str(text[0]).lower()
-        creator = user['first_name'] + ' ' + user['last_name']
+        creator = user['name']
         answers = separate_by(str(text[-1]).lower(), ',')
         questions_number = len(answers.split(','))
         date_created = time.strftime(r"%Y-%m-%d %H:%M:%S", time.localtime())
@@ -1493,7 +1314,7 @@ async def get_test_id(message: types.Message):
     if user is not None and (user['is_admin'] is True or user['is_superuser'] is True):
         await Form.test_results.set()
         await message.reply(
-            "Test raqamini kiriting\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
+            "Test raqamini kiriting\.\n\n%s" % md.code('Owned by abduraxmonomonov.uz'),
             parse_mode=types.ParseMode.MARKDOWN_V2,
         )
     else:
@@ -1526,7 +1347,7 @@ async def get_test_results(message: types.Message, state: FSMContext):
                 # Value here is a dict
                 for index, value in enumerate(results):
                     out_msg += f"{index + 1}\. {value['test_taker']} \- {value['correct_answers']} ✅\n"
-                out_msg = out_msg + '\n\n' + md.code('Owned by abduraxmonomonov.uz')
+                out_msg = out_msg + '\n' + md.code('Owned by abduraxmonomonov.uz')
                 await message.reply(
                     out_msg,
                     parse_mode=types.ParseMode.MARKDOWN_V2,
@@ -1633,7 +1454,7 @@ async def check_results(message: types.Message, test_id: str, answers: dict, cor
     incorrect_answers = list(answers.items() - correct_answers.items())
     correct_ones = len(correct_answers) - len(incorrect_answers)
     date_taken = time.strftime(r"%Y/%m/%d %H:%M:%S", time.localtime())
-    if f"{user['first_name']} {user['last_name']}" not in the_attended:
+    if f"{user['name']}" not in the_attended:
         sk.get_supplies(
             'test_results',
             [
@@ -1648,7 +1469,7 @@ async def check_results(message: types.Message, test_id: str, answers: dict, cor
             ],
             [
                 date_taken,
-                user['first_name'] + ' ' + user['last_name'],
+                user['name'],
                 test_id,
                 test_['test_subject'],
                 len(str(test_['answers']).split(',')),
@@ -1659,7 +1480,7 @@ async def check_results(message: types.Message, test_id: str, answers: dict, cor
         )
     await message.reply(
             f"Test topshirilgan sana: {time.strftime(r'%Y/%m/%d %H:%M:%S', time.localtime())}\n" \
-            f"Topshiruvchi: {user['last_name']} {user['first_name']}\n" \
+            f"Topshiruvchi: {user['name']}\n" \
             f"Test fani: {str(test_['test_subject']).title().replace('_', ' ')}\n\n" \
             f"Tog'ri javoblar soni: {correct_ones} ✅\n" \
             f"Noto'g'ri javoblar soni: {len(incorrect_answers)} ❌\n" \
@@ -1674,31 +1495,25 @@ async def check_results(message: types.Message, test_id: str, answers: dict, cor
 async def get_test_answers(message: types.Message):
     """
     Tells a user how to send test answers.
-    """
+    """ 
 
     await Form.test_check.set()
     text = "Javoblarni quyidagi ko'rinishda yuboring ⬇️\n\n"
-    text2 = md.code("<test_kodi>:<fan_nomi>:javoblar...\n\n")
-    text3 = "Misol \-\> %s\n\n%s" % (md.code('12345:informatika:abcdabcdabcd...'), md.code('Owned by abduraxmonomonov.uz'))
-    await message.reply(text + text2 + text3, parse_mode=types.ParseMode.MARKDOWN_V2)
+    text2 = md.code('12345:abcdabcdabcd...\n\n') + md.code('Owned by abduraxmonomonov.uz')
+    await message.reply(text + text2, parse_mode=types.ParseMode.MARKDOWN_V2)
 
 
-async def no_names(message: types.Message):
+async def no_name(message: types.Message):
     """
-    Asks the user to provide their first and last names.
+    Asks the user to provide their name.
     """
 
-    await Form.names.set()
-    text = "Hurmatli foydalanuvchi botdan foydalanishni davom etish uchun " \
-    "bir qancha ma'lumotlaringizni kiritishingiz lozim\. Keling birinchi " \
-    "familiya va ismingizdan boshlaymiz\. Quyida keltirilgan misol kabi familiya va ismingizni kiriting\.\n\n" \
-    "Misol \-\> %s\n\n%s\n\n%s" % \
-    (
-        md.code("f:Boltayev i:Bolta"), 
-        md.underline("⚠️Familiya oldidan 'f:' va ism oldidan 'i:' belgilarini qo'yishni unutmang⚠️"), 
-        str(md.code('Owned by abduraxmonomonov.uz')),
+    await Form.name.set()
+    await message.reply(
+        "Hurmatli foydalanuvchi botdan foydalanishni davom etish uchun ism va familiyangizni kiriting\.\n\n%s" % \
+        md.code('Owned by abduraxmonomonov.uz'), 
+        parse_mode=types.ParseMode.MARKDOWN_V2,
     )
-    await message.reply(text, parse_mode=types.ParseMode.MARKDOWN_V2)
 
 
 async def no_subscription(message: types.Message):
@@ -1728,9 +1543,8 @@ async def send_test_results(
     """
 
     for result in results:
-        first_name = str(result['test_taker']).split()[0]
-        last_name = str(result['test_taker']).split()[1]
-        taker = user_model.get_user_by_name(first_name, last_name)
+        name = str(result['test_taker'])
+        taker = user_model.get_user_by_name(name)
         user_answers = get_items_in_dict(str(result['user_answers']).split(','))
         correct_answers = list(user_answers.items() & dicted_answers.items())
         incorrect_answers = list(user_answers.items() - dicted_answers.items())
@@ -1739,7 +1553,7 @@ async def send_test_results(
         str_cor_ans += ' ✅ '
         str_inc_ans += ' ❌ '
         msg_to_taker = f"{test_['test_id']} raqamli test yakunlandi\.\n\n" \
-        f"Test topshiruvchi: {first_name} {last_name}\n" \
+        f"Test topshiruvchi: {name}\n" \
         f"To'g'ri javoblar\({len(correct_answers)}\):\n\n {str_cor_ans}\n\n" \
         f"Noto'g'ri javoblar\({len(incorrect_answers)}\):\n\n {str_inc_ans}\n\n" \
         f"{md.code('Owned by abduraxmonomonov.uz')}"
@@ -1761,7 +1575,7 @@ async def send_user_info(message: types.Message, user: dict):
     changeUserInfoBtns.add(
         InlineKeyboardButton(
             "Familiya va ismni o'zgartirish ♻️", 
-            callback_data='change_names',
+            callback_data='change_name',
         )
     )
     changeUserInfoBtns.add(
@@ -1772,30 +1586,16 @@ async def send_user_info(message: types.Message, user: dict):
     )
     changeUserInfoBtns.add(
         InlineKeyboardButton(
-            "Manzilni o'zgartirish ♻️", 
-            callback_data='change_address',
-        )
-    )
-    changeUserInfoBtns.add(
-        InlineKeyboardButton(
-            "Maktabni o'zgartirish ♻️", 
+            "Maktab va sinfni o'zgartirish ♻️", 
             callback_data='change_school',
-        )
-    )
-    changeUserInfoBtns.add(
-        InlineKeyboardButton(
-            "Sinfni o'zgartirish ♻️", 
-            callback_data='change_class',
         )
     )
     username = '@' + user['username'] if user['username'] != "Mavjud emas" else md.underline(user['username'])
     await message.reply(
         f"Telegram hisobni tasdiqlovchi raqam \(id\): {md.underline(user['chat_id'])}\n" \
-        f"Foydalanuvchi: {md.code(user['first_name'])} {md.code(user['last_name'])}\n" \
+        f"Foydalanuvchi: {md.code(user['name'])}\n" \
         f"Telefon raqam: {md.code(user['phone_number'])}\n" \
-        f"Manzil: {md.code(user['address'])}\n" \
         f"Maktab: {md.code(user['school'])}\n" \
-        f"Sinf: {md.code(user['class'])}\n" \
         f"Foydalanuvchi nomi: {username}\n\n" \
         f"{md.code('Owned by abduraxmonomonov.uz')}",
         parse_mode=types.ParseMode.MARKDOWN_V2,
