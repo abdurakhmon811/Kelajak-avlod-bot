@@ -1079,7 +1079,7 @@ async def get_users(message: types.Message):
             wsh[f"B{index + 1}"] = usr['name'].title()
             wsh[f"C{index + 1}"] = usr['phone_number']
             wsh[f"D{index + 1}"] = usr['school']
-            wsh[f"E{index + 1}"] = usr['username'].replace('\_', '-')
+            wsh[f"E{index + 1}"] = usr['username'].replace('\_', '_')
             wsh.column_dimensions['A'].width = 3
             wsh.column_dimensions['B'].width = 25
             wsh.column_dimensions['C'].width = 20
