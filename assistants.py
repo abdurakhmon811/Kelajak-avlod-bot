@@ -18,10 +18,10 @@ class DB:
 
         try:
             db: Connection = msdb.connect(
-                host='localhost',
-                database='tcb_db',
-                user='Abdurakhmon',
-                password='longwaythroughchallenges2002811@'
+                host='',
+                database='',
+                user='',
+                password=''
             )
         except Error as e:
             print('An error happened while trying to connect to the database: ', e)
