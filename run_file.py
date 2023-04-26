@@ -26,11 +26,11 @@ import re
 import time
 
 
-API_TOKEN = '5899291373:AAGo6s2FB1jn2e7PbHmjtRt2wDsLO9hHPh4'
-bot_owner_id = 1170330985
-bot_owner_url = 'https://t.me/abduraxmonomonov'
-superuser_panel_password = '6238808AAG'
-admin_password = 8808085
+API_TOKEN = ''
+bot_owner_id = ''
+bot_owner_url = ''
+superuser_panel_password = ''
+admin_password = ''
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
