@@ -2,7 +2,6 @@
 NOTE: When creating tables for users, keep in mind that the table should be called USERS(in lower case).
 Otherwise, multiple errors can happen. And the same principle goes for tests and channels.
 """
-from MySQLdb import Error
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
@@ -22,13 +21,12 @@ from assistants import Channel, \
     separate_by
 from openpyxl import Workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
-import MySQLdb as msdb
 import logging
 import re
 import time
 
 
-API_TOKEN = '6238808085:AAGIrojIMTdS-3V96gDjAbMn6NIkULDmGzc'
+API_TOKEN = '5899291373:AAGo6s2FB1jn2e7PbHmjtRt2wDsLO9hHPh4'
 bot_owner_id = 1170330985
 bot_owner_url = 'https://t.me/abduraxmonomonov'
 superuser_panel_password = '6238808AAG'
@@ -37,73 +35,55 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
-sk = None
-user_model = None
-fac = None
-channel = None
-test = None
-test_results = None
-try:
-    db = msdb.connect(
-            host='localhost',
-            database='tcb_db',
-            user='Abdurakhmon',
-            password='longwaythroughchallenges2002811@'
-        )
-    sk = Storekeeper(db)
-    user_model = User(db)
-    fac = DBFactory(db)
-    channel = Channel(db)
-    test = Test(db)
-    test_results = TestResult(db)
-except Error as e:
-    print('An error happened while trying to make a connection to MySql: ', e)
-else:
-    cursor = db.cursor()
-    if sk.table_exists('users') is False:
-        fac.create_table(
-            'users', 
-            fac.integerfield('chat_id', 'bigint'), 
-            fac.charfield('name', 150, long_text=True), 
-            fac.charfield('phone_number', 20, long_text=True),
-            fac.charfield('school', 100, long_text=True),
-            fac.charfield('username', 100, long_text=True), 
-            fac.integerfield('is_superuser', 'tinyint'), 
-            fac.integerfield('is_admin', 'tinyint'),
-            fac.set_constraint('pk_user', 'chat_id'),
-        )
-    if sk.table_exists('tests') is False:
-        fac.create_table(
-            'tests', 
-            fac.integerfield('test_id'),
-            fac.charfield('test_subject', 150, long_text=True),
-            fac.charfield('creator', 150, long_text=True), 
-            fac.charfield('answers', 400, long_text=True), 
-            fac.datetimefield('date_created'),
-            fac.datetimefield('date_deactivated'),
-            fac.integerfield('is_active', 'TINYINT', 1), 
-            fac.set_constraint('pk_test', 'test_id'),
-        )
-    if sk.table_exists('test_results') is False:
-        fac.create_table(
-            'test_results',
-            fac.datetimefield('date_taken'),
-            fac.charfield('test_taker', 150, long_text=True),
-            fac.integerfield('test_id'),
-            fac.charfield('test_subject', 150, long_text=True),
-            fac.integerfield('questions_length'),
-            fac.integerfield('correct_answers'),
-            fac.integerfield('incorrect_answers'),
-            fac.charfield('user_answers', 300, long_text=True),
-        )
-    if sk.table_exists('channels') is False:
-        fac.create_table(
-            'channels',
-            fac.charfield('username', 300, long_text=True),
-            fac.datetimefield('date_added', date_only=True),
-            fac.set_constraint('pk_channel', 'username'),
-        )
-    print('Database connection made successfully!')
+sk = Storekeeper()
+user_model = User()
+fac = DBFactory()
+channel = Channel()
+test = Test()
+test_results = TestResult()
+if sk.table_exists('users') is False:
+    fac.create_table(
+        'users', 
+        fac.integerfield('chat_id', 'bigint'), 
+        fac.charfield('name', 150, long_text=True), 
+        fac.charfield('phone_number', 20, long_text=True),
+        fac.charfield('school', 100, long_text=True),
+        fac.charfield('username', 100, long_text=True), 
+        fac.integerfield('is_superuser', 'tinyint'), 
+        fac.integerfield('is_admin', 'tinyint'),
+        fac.set_constraint('pk_user', 'chat_id'),
+    )
+if sk.table_exists('tests') is False:
+    fac.create_table(
+        'tests', 
+        fac.integerfield('test_id'),
+        fac.charfield('test_subject', 150, long_text=True),
+        fac.charfield('creator', 150, long_text=True), 
+        fac.charfield('answers', 400, long_text=True), 
+        fac.datetimefield('date_created'),
+        fac.datetimefield('date_deactivated'),
+        fac.integerfield('is_active', 'TINYINT', 1), 
+        fac.set_constraint('pk_test', 'test_id'),
+    )
+if sk.table_exists('test_results') is False:
+    fac.create_table(
+        'test_results',
+        fac.datetimefield('date_taken'),
+        fac.charfield('test_taker', 150, long_text=True),
+        fac.integerfield('test_id'),
+        fac.charfield('test_subject', 150, long_text=True),
+        fac.integerfield('questions_length'),
+        fac.integerfield('correct_answers'),
+        fac.integerfield('incorrect_answers'),
+        fac.charfield('user_answers', 300, long_text=True),
+    )
+if sk.table_exists('channels') is False:
+    fac.create_table(
+        'channels',
+        fac.charfield('username', 300, long_text=True),
+        fac.datetimefield('date_added', date_only=True),
+        fac.set_constraint('pk_channel', 'username'),
+    )
 
 # Keyboard buttons
 addChannelBtn = KeyboardButton("Obuna uchun kanal qo'shish ➕")
@@ -1099,7 +1079,7 @@ async def get_users(message: types.Message):
             wsh[f"B{index + 1}"] = usr['name'].title()
             wsh[f"C{index + 1}"] = usr['phone_number']
             wsh[f"D{index + 1}"] = usr['school']
-            wsh[f"E{index + 1}"] = usr['username']
+            wsh[f"E{index + 1}"] = usr['username'].replace('\_', '-')
             wsh.column_dimensions['A'].width = 3
             wsh.column_dimensions['B'].width = 25
             wsh.column_dimensions['C'].width = 20

@@ -1,8 +1,43 @@
 from MySQLdb.connections import Connection
-from MySQLdb._exceptions import OperationalError
+from MySQLdb._exceptions import Error, OperationalError
+import MySQLdb as msdb
 import random as rm
 import re
 import time
+
+
+class DB:
+    """
+    A class for manipulating database.
+    """
+
+    def make_connection(self) -> Connection:
+        """
+        Connects to the database.
+        """
+
+        try:
+            db: Connection = msdb.connect(
+                host='localhost',
+                database='tcb_db',
+                user='Abdurakhmon',
+                password='longwaythroughchallenges2002811@'
+            )
+        except Error as e:
+            print('An error happened while trying to connect to the database: ', e)
+        else:
+            print('Database connection made successfully!')
+            return db
+
+    
+    def close_connection(self, connection: Connection, cursor: msdb.cursors.Cursor):
+        """
+        Closes the opened connection along with the cursor.
+        """
+
+        cursor.close()
+        connection.close()
+        print('Database connection closed successfully!')
 
 
 class Channel:
@@ -10,36 +45,33 @@ class Channel:
     A class for modeling channels.
     """
 
-    def __init__(self, db_connection: Connection):
-        """Initialize the database connection."""
-
-        self.db = db_connection
-    
-
     def get_channel(self, link: str = None, latest: bool = True) -> dict:
         """
         Retrieves the data about the channel with the primary key and returns a dictionary containing the data.
         """
 
+        db = DB()
+
         result = None
         if not link and latest is True:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute(
                 """SELECT * FROM channels ORDER BY date_added DESC LIMIT 1"""
             )
             result = cursor.fetchone()
-            cursor.close()
         elif link and latest is False:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute(
                 """SELECT * FROM channels WHERE username = '%s'""" % link
             )
             result = cursor.fetchone()
-            cursor.close()
         else:
             raise ValueError(
                 'You cannot pass LINK and set LATEST to True simultaneously! Pass LINK or set latest to True!'
             )
+        db.close_connection(connection, cursor)
         if result:
             resulting_dict = {
                 'username': result[0],
@@ -54,11 +86,13 @@ class Channel:
         Retrieves all channel usernames that exist in the database.
         """
 
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute("""SELECT username FROM channels""")
         results = cursor.fetchall()
-        cursor.close()
+        db.close_connection(connection, cursor)
         return [each[0] for each in results] if results else None
 
 
@@ -66,12 +100,6 @@ class DBFactory:
     """
     A class for creating tables and modifying them.
     """
-
-    def __init__(self, db_connection: Connection) -> None:
-        """Initialize the connection"""
-
-        self.db = db_connection
-    
 
     def charfield(self, field_name: str, max_length: int, long_text: bool = False, default: str = None) -> str:
         """
@@ -99,15 +127,17 @@ class DBFactory:
         Creates a table with the specified name.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         table_definition = {
             'table_name': table_name,
             'columns': ', '.join([arg for arg in args])
         }
         cursor.execute("""CREATE TABLE %(table_name)s (%(columns)s)""" % table_definition)
-        self.db.commit()
-        cursor.close()
+        connection.commit()
+        db.close_connection(connection, cursor)
     
 
     def set_constraint(self, constraint_name: str, for_column: str, constraint_type: str = 'PRIMARY KEY'):
@@ -175,25 +205,21 @@ class Storekeeper:
     A class for generating, manipulating and retrieving data from a MySQL database.
     """
 
-    def __init__(self, db_connection: Connection):
-        """Initialize the database connection."""
-
-        self.db = db_connection
-
-
     def drop_table(self, table_name: str):
         """
         Drops/Removes the given table from the database.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
         
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         try:
             cursor.execute("""DROP TABLE %s""" % table_name)
         except OperationalError:
             raise ValueError("Invalid table name!")
         finally:
-            cursor.close()
+            db.close_connection(connection, cursor)
     
 
     def get_supplies(self, table_name: str, columns: list | tuple, values: list | tuple):
@@ -202,6 +228,8 @@ class Storekeeper:
 
         NOTE: the length of columns and values should correspond to each other, otherwise ValueError is raised.
         """
+
+        db = DB()
         
         if len(columns) == len(values):
             columns = ["{}".format(column) for column in columns]
@@ -213,10 +241,11 @@ class Storekeeper:
                 'columns': columns,
                 'values': values,
             }
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute("""INSERT INTO %(table_name)s (%(columns)s) VALUES (%(values)s)""" % entries)
-            self.db.commit()
-            cursor.close()
+            connection.commit()
+            db.close_connection(connection, cursor)
         else:
             raise ValueError('Invalid number of columns and values! The length of the two does not correspond.')
     
@@ -226,11 +255,13 @@ class Storekeeper:
         Checks if the given table exists in the database.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute("""SHOW TABLES LIKE '%s'""" % table_name)
         result = cursor.fetchone()
-        cursor.close()
+        db.close_connection(connection, cursor)
         return True if result else False
     
 
@@ -239,11 +270,13 @@ class Storekeeper:
         Deletes an item corresponding to the given primary key from a row in the given table.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
         
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute("""DELETE FROM {} WHERE {} = '{}';""".format(table_name, pk_name, pk_value))
-        self.db.commit()
-        cursor.close()
+        connection.commit()
+        db.close_connection(connection, cursor)
 
 
 class Test:
@@ -251,28 +284,25 @@ class Test:
     A class for modeling tests.
     """
 
-    def __init__(self, db_connection: Connection):
-        """Initialize the database connection."""
-
-        self.db = db_connection
-    
-
     def deactivate(self, test_id: str):
         """
         Sets the is_active attribute of a test to 0(False).
         """
 
+        db = DB()
+
         test = self.get_test(test_id)
         if test is not None:
             if int(test['is_active']) == True:
-                cursor = self.db.cursor()
+                connection = db.make_connection()
+                cursor: msdb.cursors.Cursor = connection.cursor()
                 now = time.strftime(r"%Y-%m-%d %H:%M:%S", time.localtime())
                 cursor.execute(
                     """UPDATE tests SET is_active = 0, date_deactivated = '%s' WHERE test_id = '%s'""" % \
                     (now, test_id)
                 )
-                self.db.commit()
-                cursor.close()
+                connection.commit()
+                db.close_connection(connection, cursor)
             else:
                 raise AttributeError('The test is already deactivated!')
         else:
@@ -284,11 +314,13 @@ class Test:
         Retrieves all the ids related to test from the the database.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute("""SELECT test_id FROM tests""")
         results = cursor.fetchall()
-        cursor.close()
+        db.close_connection(connection, cursor)
         return list(results) if results else None
     
 
@@ -297,11 +329,14 @@ class Test:
         Retrieves the data about the test with the primary key and returns a dictionary containing the data.
         """
 
+        db = DB()
+
         if test_id:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute("""SELECT * FROM tests WHERE test_id = '%s'""" % test_id)
             result = cursor.fetchone()
-            cursor.close()
+            db.close_connection(connection, cursor)
             if result:
                 resulting_dict = {
                     'test_id': result[0],
@@ -321,12 +356,14 @@ class Test:
         Retrieves all the tests from the database.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
-        output = []
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute("""SELECT * FROM tests""")
         results = cursor.fetchall()
-        cursor.close()
+        db.close_connection(connection, cursor)
+        output = []
         if results:
             for result in results:
                 out_dict = {
@@ -348,25 +385,22 @@ class TestResult:
     A class for modeling test results.
     """
 
-    def __init__(self, db_connection: Connection):
-        """Initialize the database connection"""
-
-        self.db = db_connection
-    
-
     def get_results(self, test_id: str) -> list:
         """
         Retrieves the test results with corresponding test id or creator, or gets all in the database.
         """
 
+        db = DB()
+
         if test_id:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute(
                 """SELECT test_taker, correct_answers, user_answers  FROM test_results WHERE test_id = '%s' """ \
                 "ORDER BY correct_answers DESC" % test_id
             )
             results = cursor.fetchall()
-            cursor.close()
+            db.close_connection(connection, cursor)
             if results:
                 resulting = []
                 for result in results:
@@ -385,25 +419,21 @@ class User:
     A class for modeling bot users.
     """
 
-    def __init__(self, db_connection: Connection):
-        """Initialize the database connection."""
-    
-        self.db = db_connection
-    
-
     def change_name(self, user_id: str, name: str):
         """
         Changes the user's name.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute(
             """UPDATE users SET name = '%s' WHERE chat_id = '%s'""" % \
             (name, user_id)
         )
-        self.db.commit()
-        cursor.close()
+        connection.commit()
+        db.close_connection(connection, cursor)
 
 
     def change_phone_number(self, user_id: str, phone_number: str):
@@ -411,14 +441,16 @@ class User:
         Changes the user's phone number.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute(
             """UPDATE users SET phone_number = '%s' WHERE chat_id = '%s'""" % \
             (phone_number, user_id)
         )
-        self.db.commit()
-        cursor.close()
+        connection.commit()
+        db.close_connection(connection, cursor)
 
 
     def change_school(self, user_id: str, school: str):
@@ -426,14 +458,16 @@ class User:
         Changes the user's school.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute(
             """UPDATE users SET school = '%s' WHERE chat_id = '%s'""" % \
             (school, user_id)
         )
-        self.db.commit()
-        cursor.close()
+        connection.commit()
+        db.close_connection(connection, cursor)
 
     
     def delete_user(self, user_id: str):
@@ -441,13 +475,15 @@ class User:
         Deletes the specified user from the database.
         """
         
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute(
             """DELETE FROM users WHERE chat_id = '%s'""" % user_id
         )
-        self.db.commit()
-        cursor.close()
+        connection.commit()
+        db.close_connection(connection, cursor)
     
 
     def get_user_by_name(self, name: str) -> dict:
@@ -455,11 +491,14 @@ class User:
         Retrieves the user with the corresponding name.
         """
 
+        db = DB()
+
         if name:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute("""SELECT * FROM users WHERE name = '%s'""" % name)
             result = cursor.fetchone()
-            cursor.close()
+            db.close_connection(connection, cursor)
             if result:
                 out_dict = {
                     'chat_id': result[0],
@@ -488,11 +527,14 @@ class User:
         Set many to True if you want to get a number of users with the same primary key.
         """
 
+        db = DB()
+
         if pk_name and pk_value and all is False and many is False:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute("""SELECT * FROM users WHERE {} = '{}'""".format(pk_name, pk_value))
             result = cursor.fetchone()
-            cursor.close()
+            db.close_connection(connection, cursor)
             if result:
                 resulting_dict = {
                     'chat_id': result[0],
@@ -505,10 +547,11 @@ class User:
                 }
                 return resulting_dict
         elif not pk_name and not pk_value and all is True and many is False:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute("""SELECT * FROM users""")
             results = cursor.fetchall()
-            cursor.close()
+            db.close_connection(connection, cursor)
             output = []
             if results:
                 for result in results:
@@ -524,11 +567,12 @@ class User:
                     output.append(resulting_dict)
                 return output
         elif pk_name and pk_value and all is False and many is True:
-            cursor = self.db.cursor()
+            connection = db.make_connection()
+            cursor: msdb.cursors.Cursor = connection.cursor()
             cursor.execute("""SELECT * FROM users WHERE {} = '{}'""".format(pk_name, pk_value))
             results = cursor.fetchall()
-            cursor.close()
-            out = []
+            db.close_connection(connection, cursor)
+            output = []
             if results:
                 for result in results:
                     resulting_dict = {
@@ -540,8 +584,8 @@ class User:
                         'is_superuser': True if int(result[5]) == 1 else False,
                         'is_admin': True if int(result[6]) == 1 else False,
                     }
-                    out.append(resulting_dict)
-                return out
+                    output.append(resulting_dict)
+                return output
         return None
     
 
@@ -550,11 +594,13 @@ class User:
         Returns the number of all available users.
         """
 
-        cursor = self.db.cursor()
+        db = DB()
 
+        connection = db.make_connection()
+        cursor: msdb.cursors.Cursor = connection.cursor()
         cursor.execute("""SELECT chat_id FROM users""")
         results = cursor.fetchall()
-        cursor.close()
+        db.close_connection(connection, cursor)
         return len(results)
 
 
@@ -563,13 +609,16 @@ class User:
         Sets the is_admin attribute of a user to 1(True).
         """
 
+        db = DB()
+
         user = self.get_user_or_users('chat_id', chat_id)
         if user is not None:
             if int(user['is_admin']) == False:
-                cursor = self.db.cursor()
+                connection = db.make_connection()
+                cursor: msdb.cursors.Cursor = connection.cursor()
                 cursor.execute("""UPDATE users SET is_admin = 1 WHERE chat_id = '%s'""" % chat_id)
-                self.db.commit()
-                cursor.close()
+                connection.commit()
+                db.close_connection(connection, cursor)
             else:
                 raise AttributeError('The user is already an admin!')
         else:
@@ -581,13 +630,16 @@ class User:
         Sets the is_superuser attribute of a user to 1(True).
         """
 
+        db = DB()
+
         user = self.get_user_or_users('chat_id', chat_id)
         if user is not None:
             if int(user['is_superuser']) == False:
-                cursor = self.db.cursor()
+                connection = db.make_connection()
+                cursor: msdb.cursors.Cursor = connection.cursor()
                 cursor.execute("""UPDATE users SET is_superuser = 1, is_admin = 1 WHERE chat_id = '%d'""" % chat_id)
-                self.db.commit()
-                cursor.close()
+                connection.commit()
+                db.close_connection(connection, cursor)
             else:
                 raise AttributeError('The user is already a superuser!')
         else:
